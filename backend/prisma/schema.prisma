@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  goals       Goal[]
+  departments Department[]
+  createdAt   DateTime     @default(now())
+}
+
+model Goal {
+  id          String   @id @default(cuid())
+  title       String
+  s1          String   // Start State
+  s2          String   // End State
+  order       Int      @default(0)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lists       BoardList[]
+  tasks       Task[]
+  progress    Float    @default(0)
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Department {
+  id        String  @id @default(cuid())
+  name      String
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  progress  Float   @default(0)
+  color     String  // hex color for UI
+}
+
+model BoardList {
+  id        String   @id @default(cuid())
+  title     String
+  order     Int
+  goalId    String
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  goalId       String
+  goal         Goal       @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  listId       String
+  list         BoardList  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  order        Int        @default(0)
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  subtasks     Subtask[]
+  assignees    User[]     @relation("TaskAssignees")
+
+  // TRU Scoring (each 1–5 scale)
+  technicality Int
+  regularity   Int
+  urgency      Int
+  truScore     Float
+
+  dueDate      DateTime?
+  gcalEventId  String?
+  progress     Float      @default(0)
+  createdAt    DateTime   @default(now())
+}
+
+model Subtask {
+  id           String     @id @default(cuid())
+  title        String
+  taskId       String
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  status       String     @default("DOING")
+  assignees    User[]     @relation("SubtaskAssignees")
+  technicality Int
+  regularity   Int
+  urgency      Int
+  truScore     Float
+  dueDate      DateTime?
+  progress     Float      @default(0)
+}
+
+model User {
+  id       String    @id @default(cuid())
+  name     String
+  email    String    @unique
+  avatar   String?
+  role     String    @default("MEMBER")
+  tasks    Task[]    @relation("TaskAssignees")
+  subtasks Subtask[] @relation("SubtaskAssignees")
+}
