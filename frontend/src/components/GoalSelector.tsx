@@ -22,6 +22,7 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
   const [isAdding, setIsAdding] = React.useState(false);
   const [newGoal, setNewGoal] = React.useState({ title: '', s1: '', s2: '' });
   const [confirmGoal, setConfirmGoal] = React.useState<Goal | null>(null);
+  const [jumpWarning, setJumpWarning] = React.useState(false);
 
   const handleDeleteClick = (e: React.MouseEvent, goal: Goal) => {
     e.stopPropagation();
@@ -38,6 +39,13 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
 
   const startAdding = () => {
     const lastGoal = goals[goals.length - 1];
+    
+    if (lastGoal && lastGoal.progress < 100) {
+      setJumpWarning(true);
+      setTimeout(() => setJumpWarning(false), 3000);
+      return;
+    }
+    
     setNewGoal({
       title: `Status ${goals.length + 1}`,
       s1: lastGoal ? lastGoal.s2 : 'Initial State',
@@ -111,9 +119,9 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
         </div>
       )}
 
-      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50 p-4">
+      <div className="bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 p-4 transition-colors duration-300">
         <div className="max-w-6xl mx-auto flex items-center gap-8 overflow-x-auto no-scrollbar py-2">
-          <div className="flex-shrink-0 font-mono font-black text-slate-400 text-xs tracking-widest uppercase">
+          <div className="flex-shrink-0 font-mono font-black text-slate-400 dark:text-slate-500 text-xs tracking-widest uppercase">
             Mission Map
           </div>
           
@@ -124,19 +132,19 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
                 <div
                   className={`flex items-start p-3 rounded-xl transition-all border-2 min-w-[200px] cursor-pointer relative group/item ${
                     currentGoalId === goal.id
-                      ? 'border-blue-500 bg-blue-50 shadow-md'
-                      : 'border-slate-100 bg-white hover:border-slate-300 hover:shadow-sm'
+                      ? 'border-blue-500 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-md'
+                      : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm'
                   }`}
                   onClick={() => navigate(`/goal/${goal.id}/dashboard`)}
                 >
                   <div className="flex-1 min-w-0 pr-6">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                        currentGoalId === goal.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'
+                        currentGoalId === goal.id ? 'bg-blue-600 text-white dark:bg-blue-500 dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                       }`}>
                         G{index + 1}
                       </span>
-                      <span className="text-xs font-bold text-slate-700 truncate">{goal.title}</span>
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{goal.title}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
                       <span className="truncate max-w-[70px]">{goal.s1}</span>
@@ -144,7 +152,7 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
                       <span className="text-blue-500 truncate max-w-[70px]">{goal.s2}</span>
                     </div>
                     {/* Progress bar */}
-                    <div className="mt-2 w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+                    <div className="mt-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1 overflow-hidden">
                       <div
                         className="h-full bg-blue-500 rounded-full transition-all duration-700"
                         style={{ width: `${goal.progress ?? 0}%` }}
@@ -168,19 +176,19 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
                 </div>
 
                 {/* Connector line */}
-                <div className="h-[2px] w-8 bg-slate-200 rounded-full flex-shrink-0" />
+                <div className="h-[2px] w-8 bg-slate-200 dark:bg-slate-800 rounded-full flex-shrink-0" />
               </React.Fragment>
             ))}
 
             {/* Add Goal / Form */}
             {isAdding ? (
-              <div className="flex items-center gap-3 bg-white border-2 border-blue-200 p-3 rounded-2xl shadow-lg ring-4 ring-blue-50 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border-2 border-blue-200 dark:border-blue-900 p-3 rounded-2xl shadow-lg ring-4 ring-blue-50 dark:ring-blue-900/30 animate-in zoom-in-95 duration-200">
                 <div className="flex flex-col gap-2">
                   <input
                     type="text"
                     autoFocus
                     placeholder="Goal Title"
-                    className="text-xs font-bold bg-slate-50 p-2 rounded-lg border-none focus:ring-2 focus:ring-blue-500"
+                    className="text-xs font-bold bg-slate-50 dark:bg-slate-800 dark:text-white p-2 rounded-lg border-none focus:ring-2 focus:ring-blue-500"
                     value={newGoal.title}
                     onChange={e => setNewGoal({...newGoal, title: e.target.value})}
                   />
@@ -188,15 +196,15 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
                     <input
                       type="text"
                       placeholder="S1 (Start)"
-                      className="text-[10px] w-24 p-1.5 bg-slate-50 rounded-md border-none"
+                      className="text-[10px] w-24 p-1.5 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-md border-none"
                       value={newGoal.s1}
                       onChange={e => setNewGoal({...newGoal, s1: e.target.value})}
                     />
-                    <span className="text-slate-300">→</span>
+                    <span className="text-slate-300 dark:text-slate-600">→</span>
                     <input
                       type="text"
                       placeholder="S2 (Goal)"
-                      className="text-[10px] w-24 p-1.5 bg-blue-50 rounded-md border-none text-blue-600 font-bold"
+                      className="text-[10px] w-24 p-1.5 bg-blue-50 dark:bg-blue-900/40 rounded-md border-none text-blue-600 dark:text-blue-400 font-bold"
                       value={newGoal.s2}
                       onChange={e => setNewGoal({...newGoal, s2: e.target.value})}
                     />
@@ -218,20 +226,28 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
                 </div>
               </div>
             ) : (
-              <button
-                onClick={startAdding}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-500 transition-all text-xs font-bold group"
-              >
-                <span className="bg-slate-100 p-0.5 rounded group-hover:bg-slate-200">+</span>
-                Add Goal
-              </button>
+              <div className="relative flex items-center">
+                <button
+                  onClick={startAdding}
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:border-slate-400 dark:hover:border-slate-600 hover:text-slate-500 dark:hover:text-slate-300 transition-all text-xs font-bold group"
+                >
+                  <span className="bg-slate-100 dark:bg-slate-800 p-0.5 rounded group-hover:bg-slate-200 dark:group-hover:bg-slate-700">+</span>
+                  Add Goal
+                </button>
+                {jumpWarning && (
+                  <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-900 px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-xl animate-in slide-in-from-top-4 fade-in duration-300 z-[999] flex items-center gap-3">
+                    <span className="text-lg">⚠️</span>
+                    Ops no jumping, first reach this goal!
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Trash Bin */}
-            <div className="flex items-center gap-4 ml-4 pl-4 border-l border-slate-200">
+            <div className="flex items-center gap-4 ml-4 pl-4 border-l border-slate-200 dark:border-slate-800">
               <button
                 onClick={() => navigate(`/goal/${currentGoalId || goals[0]?.id}/trash`)}
-                className="p-3 rounded-xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all border border-transparent hover:border-red-100"
+                className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 transition-all border border-transparent hover:border-red-100 dark:hover:border-red-900/50"
                 title="Archive Chamber"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

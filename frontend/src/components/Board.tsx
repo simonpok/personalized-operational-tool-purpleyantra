@@ -52,7 +52,6 @@ export function Board() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDeptId, setNewTaskDeptId] = useState('');
   const [newTaskTRU, setNewTaskTRU] = useState({ T: 3, R: 3, U: 3 });
-  const [isSeeding, setIsSeeding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [departments, setDepartments] = useState<{id: string, name: string, color: string}[]>([]);
 
@@ -67,22 +66,6 @@ export function Board() {
       }
     } catch (e) {
       console.error('Failed to fetch lists', e);
-    }
-  };
-
-  const seedData = async () => {
-    try {
-      setIsSeeding(true);
-      const res = await fetch('http://localhost:3001/api/seed', { method: 'POST' });
-      const data = await res.json();
-      // Redirect to the first goal of the new project
-      if (data.goal1Id) {
-        window.location.href = `/goal/${data.goal1Id}/board`;
-      }
-    } catch (e) {
-      console.error('Failed to seed', e);
-    } finally {
-      setIsSeeding(false);
     }
   };
 
@@ -232,17 +215,6 @@ export function Board() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <button 
-            onClick={seedData} 
-            disabled={isSeeding}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors text-sm shadow-sm border ${
-              isSeeding 
-                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' 
-                : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            {isSeeding ? 'Seeding...' : 'Reset & Seed'}
-          </button>
           <Link to={`/goal/${goalId}/dashboard`} className="text-blue-600 hover:text-blue-700 bg-blue-50 px-4 py-2 rounded-lg font-semibold text-sm transition-colors">
             Mission Control
           </Link>
@@ -340,19 +312,6 @@ export function Board() {
             </div>
           </div>
         </DragDropContext>
-      )}
-
-      {/* Seeding Overlay */}
-      {isSeeding && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[200] flex flex-col items-center justify-center animate-in fade-in duration-300">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-6 max-w-sm text-center">
-            <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
-            <div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Reconstructing System</h3>
-              <p className="text-slate-500 text-sm">Please wait while we recalibrate the operational environment and seed core TRU priorities...</p>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Add Task Modal */}

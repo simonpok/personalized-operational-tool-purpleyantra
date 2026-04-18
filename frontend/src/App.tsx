@@ -3,7 +3,9 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
 import { Board } from './components/Board';
 import { GoalSelector } from './components/GoalSelector';
+import { ThemeToggle } from './components/ThemeToggle';
 import React from 'react';
+import { io } from 'socket.io-client';
 
 interface Goal {
   id: string;
@@ -68,17 +70,25 @@ function Dashboard() {
       <div className="mb-2 px-1">
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500/60 transition-all duration-700">
           {(() => {
-            // Find the first goal in the sequence that is not 100% complete
-            const activeGoal = goals.find(g => g.progress < 100) || goals[goals.length - 1];
-            if (!activeGoal) return "Mission Ready";
-            
-            const match = activeGoal.title.match(/Status (\d+)/);
-            const n = match ? parseInt(match[1]) : 1;
-            
-            if (activeGoal.progress < 100) {
+            // Use fresh stats to overlay stale context if task progress was just updated
+            const currentGoalsState = goals.map(g => 
+               g.id === goalId && stats ? { ...g, progress: stats.progress } : g
+            );
+
+            const firstIncompleteIndex = currentGoalsState.findIndex(g => g.progress < 100);
+
+            if (firstIncompleteIndex === -1) {
+              const lastGoal = currentGoalsState[currentGoalsState.length - 1];
+              if (!lastGoal) return "Mission Ready";
+              const match = lastGoal.title.match(/Status (\d+)/i);
+              const n = match ? parseInt(match[1]) : currentGoalsState.length;
+              return `Congrats you reached Status ${n} and now you can move to Status ${n + 1} (S${n + 1})`;
+            } else {
+              const activeGoal = currentGoalsState[firstIncompleteIndex];
+              const match = activeGoal.title.match(/Status (\d+)/i);
+              const n = match ? parseInt(match[1]) : (firstIncompleteIndex + 1);
               return `You are currently in Status ${n} (S${n})`;
             }
-            return `CONGRATULATIONS! MISSION COMPLETE - FINAL STATUS REACHED`;
           })()}
         </span>
       </div>
@@ -368,6 +378,15 @@ const GoalLayout = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     refreshGoals();
+    
+    // Connect socket to ensure global mission context is always instantly synced
+    const socket = io('http://localhost:3001');
+    socket.on('progress:updated', () => refreshGoals());
+    socket.on('board:updated', () => refreshGoals());
+    
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const handleDeleteGoal = async (id: string) => {
@@ -431,7 +450,8 @@ const GoalLayout = ({ children }: { children: React.ReactNode }) => {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background dark:bg-slate-950 transition-colors duration-300">
+      <ThemeToggle />
       <Routes>
         <Route path="/" element={<Launcher />} />
         <Route path="/goal/:goalId/dashboard" element={<GoalLayout><Dashboard /></GoalLayout>} />

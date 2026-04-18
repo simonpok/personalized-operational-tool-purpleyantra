@@ -25,6 +25,18 @@
 
     --radius: 0.5rem;
   }
+
+  .dark {
+    --bg-primary: #0F172A; /* slate-900 */
+    --bg-card: #1E293B; /* slate-800 */
+    
+    --text-primary: #F8FAFC; /* slate-50 */
+    --text-muted: #94A3B8; /* slate-400 */
+
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 212.7 26.8% 83.9%;
+  }
 }
 
 @layer base {
