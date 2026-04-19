@@ -214,11 +214,7 @@ export function Board() {
             {isConnected ? 'LIVE SYNC' : 'OFFLINE'}
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <Link to={`/goal/${goalId}/dashboard`} className="text-blue-600 hover:text-blue-700 bg-blue-50 px-4 py-2 rounded-lg font-semibold text-sm transition-colors">
-            Mission Control
-          </Link>
-        </div>
+
       </div>
 
       {isLoading ? (
