@@ -4,6 +4,9 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
 import "dotenv/config";
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -17,6 +20,66 @@ const io = new Server(httpServer, {
 
 app.use(cors());
 app.use(express.json());
+
+// Setup Multer for local storage
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage });
+app.use('/uploads', express.static(uploadDir));
+
+// --- Helpers ---
+const logActivity = async (taskId: string, text: string) => {
+  try {
+    await prisma.comment.create({ data: { taskId, text, isSystem: true } });
+  } catch (e) {
+    console.error('Failed to log activity', e);
+  }
+};
+
+const recomputeTaskTRU = async (taskId: string) => {
+  try {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { checklists: { include: { items: true } } }
+    });
+    if (!task) return;
+
+    let allItems: any[] = [];
+    task.checklists.forEach(cl => allItems.push(...cl.items));
+
+    const scored = allItems.filter(i => i.T && i.R && i.U);
+    if (scored.length === 0) {
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { avgT: null, avgR: null, avgU: null, truOverall: null }
+      });
+      return;
+    }
+
+    const avgT = parseFloat((scored.reduce((a,b) => a + b.T!, 0) / scored.length).toFixed(1));
+    const avgR = parseFloat((scored.reduce((a,b) => a + b.R!, 0) / scored.length).toFixed(1));
+    const avgU = parseFloat((scored.reduce((a,b) => a + b.U!, 0) / scored.length).toFixed(1));
+    const truOverall = parseFloat(((avgT + avgR + avgU) / 3).toFixed(1));
+
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { avgT, avgR, avgU, truOverall }
+    });
+  } catch (e) {
+    console.error('Failed to recompute task TRU', e);
+  }
+};
 
 // --- Project & Goal Routes ---
 
@@ -115,7 +178,12 @@ app.get('/api/lists', async (req, res) => {
       include: {
         tasks: {
           orderBy: { order: 'asc' },
-          include: { department: true }
+          include: { 
+            department: true,
+            checklists: { include: { items: { orderBy: { createdAt: 'asc' } } } },
+            attachments: true,
+            comments: { orderBy: { createdAt: 'desc' } }
+          }
         }
       }
     });
@@ -123,6 +191,28 @@ app.get('/api/lists', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to fetch lists' });
+  }
+});
+
+// List Management
+app.put('/api/lists/:id', async (req, res) => {
+  try {
+    const list = await prisma.boardList.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update list' });
+  }
+});
+
+app.delete('/api/lists/:id', async (req, res) => {
+  try {
+    await prisma.boardList.delete({ where: { id: req.params.id } });
+    res.json({ message: 'List deleted' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete list' });
   }
 });
 
@@ -153,6 +243,12 @@ app.post('/api/goals', async (req, res) => {
 app.post('/api/tasks', async (req, res) => {
   try {
     const { title, listId, goalId, departmentId, technicality, regularity, urgency, truScore } = req.body;
+    
+    // Validate TRU to be exactly 1, 2, or 3
+    if (![1, 2, 3].includes(technicality) || ![1, 2, 3].includes(regularity) || ![1, 2, 3].includes(urgency)) {
+      return res.status(400).json({ error: 'T, R, and U must be 1, 2, or 3.' });
+    }
+
     const count = await prisma.task.count({ where: { listId } });
     const newTask = await prisma.task.create({
       data: {
@@ -167,11 +263,44 @@ app.post('/api/tasks', async (req, res) => {
         order: count,
         progress: 0
       },
-      include: { department: true }
+      include: { 
+        department: true,
+        checklists: { include: { items: true } },
+        attachments: true,
+        comments: { orderBy: { createdAt: 'desc' } }
+      }
     });
+
+    await logActivity(newTask.id, 'Task created in list');
+
     res.json(newTask);
   } catch (e) {
     res.status(500).json({ error: 'Failed to create task' });
+  }
+});
+
+// Update a task (for description, TRU, dueDate, etc.)
+app.put('/api/tasks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const updatedTask = await prisma.task.update({
+      where: { id },
+      data,
+      include: {
+        department: true,
+        checklists: { include: { items: true } },
+        attachments: true,
+        comments: { orderBy: { createdAt: 'desc' } }
+      }
+    });
+
+    const actionText = Object.keys(data).includes('listId') ? "moved task to a new list" : "updated task properties";
+    await logActivity(updatedTask.id, actionText);
+
+    res.json(updatedTask);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update task' });
   }
 });
 
@@ -182,6 +311,148 @@ app.delete('/api/tasks/:id', async (req, res) => {
     res.json({ message: 'Task deleted' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
+// --- Checklists & Attachments Routes ---
+
+app.post('/api/tasks/:id/checklists', async (req, res) => {
+  try {
+    const checklist = await prisma.checklist.create({
+      data: {
+        title: req.body.title || 'Checklist',
+        taskId: req.params.id
+      },
+      include: { items: true }
+    });
+    res.json(checklist);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to create checklist' });
+  }
+});
+
+app.delete('/api/checklists/:id', async (req, res) => {
+  try {
+    await prisma.checklist.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Deleted' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/checklists/:id/items', async (req, res) => {
+  try {
+    const { title, dueDate, T, R, U } = req.body;
+    let truAvg = null;
+    if (T && R && U) {
+      truAvg = parseFloat(((T + R + U) / 3).toFixed(1));
+    }
+    
+    const item = await prisma.checklistItem.create({
+      data: {
+        title,
+        dueDate,
+        T, R, U, truAvg,
+        checklistId: req.params.id
+      },
+      include: { checklist: true }
+    });
+
+    await recomputeTaskTRU(item.checklist.taskId);
+    await logActivity(item.checklist.taskId, `Added checklist item: ${title}`);
+
+    res.json(item);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to create item' });
+  }
+});
+
+app.put('/api/checklist-items/:id', async (req, res) => {
+  try {
+    const { T, R, U, isCompleted, title, dueDate } = req.body;
+    
+    // Grab original to check changes
+    const original = await prisma.checklistItem.findUnique({ where: { id: req.params.id }, include: { checklist: true } });
+    if (!original) return res.status(404).json({error: 'Not found'});
+
+    let truAvg = original.truAvg;
+    const finalT = T !== undefined ? T : original.T;
+    const finalR = R !== undefined ? R : original.R;
+    const finalU = U !== undefined ? U : original.U;
+
+    if (finalT && finalR && finalU) {
+      truAvg = parseFloat(((finalT + finalR + finalU) / 3).toFixed(1));
+    } else {
+      truAvg = null; // missing a value
+    }
+
+    const item = await prisma.checklistItem.update({
+      where: { id: req.params.id },
+      data: { T, R, U, truAvg, isCompleted, title, dueDate },
+      include: { checklist: true }
+    });
+
+    if (T !== undefined || R !== undefined || U !== undefined) {
+      await recomputeTaskTRU(item.checklist.taskId);
+    }
+    if (isCompleted !== undefined && isCompleted !== original.isCompleted) {
+      await logActivity(item.checklist.taskId, `Marked checklist item "${original.title}" as ${isCompleted ? 'complete' : 'incomplete'}`);
+    }
+
+    res.json(item);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to update item' });
+  }
+});
+
+app.delete('/api/checklist-items/:id', async (req, res) => {
+  try {
+    const item = await prisma.checklistItem.findUnique({ where: { id: req.params.id }, include: { checklist: true } });
+    if (!item) return res.status(404).json({error: 'Not found'});
+    
+    await prisma.checklistItem.delete({ where: { id: req.params.id } });
+    await recomputeTaskTRU(item.checklist.taskId);
+    await logActivity(item.checklist.taskId, `Deleted checklist item: ${item.title}`);
+    
+    res.json({ message: 'Deleted' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/tasks/:id/attachments', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const attachment = await prisma.attachment.create({
+      data: {
+        filename: req.file.originalname,
+        url: `/uploads/${req.file.filename}`,
+        size: req.file.size,
+        mimeType: req.file.mimetype,
+        taskId: req.params.id
+      }
+    });
+    await logActivity(req.params.id, `Attached file ${req.file.originalname}`);
+    res.json(attachment);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to upload attachment' });
+  }
+});
+
+app.delete('/api/attachments/:id', async (req, res) => {
+  try {
+    const att = await prisma.attachment.findUnique({ where: { id: req.params.id } });
+    if (att) {
+      const filepath = path.join(__dirname, '../', att.url);
+      if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+      await prisma.attachment.delete({ where: { id: req.params.id } });
+    }
+    res.json({ message: 'Deleted' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
   }
 });
 

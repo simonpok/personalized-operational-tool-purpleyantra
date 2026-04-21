@@ -46,6 +46,7 @@ model BoardList {
   title     String
   order     Int
   goalId    String
+  color     String?  // left border accent color
   goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
   tasks     Task[]
 }
@@ -63,17 +64,29 @@ model Task {
   department   Department @relation(fields: [departmentId], references: [id])
   subtasks     Subtask[]
   assignees    User[]     @relation("TaskAssignees")
+  checklists   Checklist[]
+  attachments  Attachment[]
 
-  // TRU Scoring (each 1–5 scale)
+  // TRU Scoring Base (Legacy/Fallback)
   technicality Int
   regularity   Int
   urgency      Int
   truScore     Float
 
+  // Computed TRU from checklists
+  avgT        Float?
+  avgR        Float?
+  avgU        Float?
+  truOverall  Float?
+
+  startDate    DateTime?
   dueDate      DateTime?
+  reminder     String?
   gcalEventId  String?
   progress     Float      @default(0)
   createdAt    DateTime   @default(now())
+  
+  comments     Comment[]
 }
 
 model Subtask {
@@ -99,4 +112,59 @@ model User {
   role     String    @default("MEMBER")
   tasks    Task[]    @relation("TaskAssignees")
   subtasks Subtask[] @relation("SubtaskAssignees")
+  comments Comment[]
+  checklistItems ChecklistItem[]
 }
+
+model Checklist {
+  id        String          @id @default(cuid())
+  title     String
+  taskId    String
+  task      Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  items     ChecklistItem[]
+  createdAt DateTime        @default(now())
+}
+
+model ChecklistItem {
+  id          String    @id @default(cuid())
+  title       String
+  isCompleted Boolean   @default(false)
+  dueDate     DateTime?
+  
+  T           Int?      // 1, 2, or 3
+  R           Int?      // 1, 2, or 3
+  U           Int?      // 1, 2, or 3
+  truAvg      Float?
+
+  assigneeId  String?
+  assignee    User?     @relation(fields: [assigneeId], references: [id])
+
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String
+  type      String   @default("FILE") // FILE | LINK
+  size      Int?     // bytes
+  mimeType  String?
+  preview   String?  // OG image or thumbnail
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  text      String
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String?  // null if system log
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+

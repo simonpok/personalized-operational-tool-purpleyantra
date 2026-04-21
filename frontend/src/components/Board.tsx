@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { TaskCard } from './TaskCard';
+import { TaskDetailModal } from './TaskDetailModal';
 
 function BoardSkeleton() {
   return (
@@ -32,12 +33,17 @@ interface Task {
   progress: number;
   order: number;
   department?: { color: string, name: string };
+  dueDate?: string;
+  description?: string;
+  checklists?: any[];
+  attachments?: any[];
 }
 
 interface List {
   id: string;
   title: string;
   order: number;
+  color?: string;
   tasks: Task[];
 }
 
@@ -54,6 +60,12 @@ export function Board() {
   const [newTaskTRU, setNewTaskTRU] = useState({ T: 3, R: 3, U: 3 });
   const [isLoading, setIsLoading] = useState(true);
   const [departments, setDepartments] = useState<{id: string, name: string, color: string}[]>([]);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // List Management State
+  const [activeListMenuId, setActiveListMenuId] = useState<string | null>(null);
+  const [editingListId, setEditingListId] = useState<string | null>(null);
+  const [editingListTitle, setEditingListTitle] = useState('');
 
   const { isConnected, emit, on } = useSocket();
 
@@ -160,6 +172,32 @@ export function Board() {
     emit('task:progress:update', { taskId, progress: newProgress });
   };
 
+  const handleUpdateList = async (listId: string, updates: any) => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/lists/${listId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        fetchLists();
+        setEditingListId(null);
+      }
+    } catch (error) {
+      console.error('Failed to update list:', error);
+    }
+  };
+
+  const handleDeleteList = async (listId: string) => {
+    if (!window.confirm("Delete this list and all its cards?")) return;
+    try {
+      await fetch(`http://localhost:3001/api/lists/${listId}`, { method: 'DELETE' });
+      fetchLists();
+    } catch (error) {
+      console.error('Failed to delete list:', error);
+    }
+  };
+
   const handleAddList = async () => {
     if (!newListTitle.trim() || !goalId) {
       setIsAddingList(false);
@@ -221,23 +259,92 @@ export function Board() {
         <BoardSkeleton />
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-6 flex-1 overflow-x-auto overflow-y-hidden pb-4 select-none">
+          <div className="flex gap-4 flex-1 overflow-x-auto overflow-y-hidden pb-4 select-none px-2 items-start" style={{ scrollSnapType: 'x mandatory' }}>
             {lists.map(list => (
-              <div key={list.id} className="w-[320px] flex-shrink-0 bg-slate-200/50 rounded-2xl border border-slate-200/60 flex flex-col max-h-full snap-start shadow-sm">
-                <div className="p-4 flex justify-between items-center bg-white/40 border-b border-slate-200/50 rounded-t-2xl">
-                  <h3 className="font-bold text-slate-700 text-xs tracking-widest uppercase">{list.title}</h3>
-                  <span className="bg-white/80 text-slate-600 text-[10px] py-1 px-2 rounded-full font-mono shadow-sm border border-slate-100">
-                    {list.tasks.length}
-                  </span>
+              <div 
+                key={list.id} 
+                className="w-[300px] sm:w-[320px] flex-shrink-0 bg-[#f1f2f4] rounded-xl flex flex-col max-h-full snap-start shadow-sm relative transition-all"
+                style={{ borderLeft: list.color ? `4px solid ${list.color}` : '4px solid transparent' }}
+              >
+                <div className="p-3 pl-4 pr-2 flex justify-between items-center rounded-t-xl group">
+                  {editingListId === list.id ? (
+                    <input 
+                       autoFocus
+                       className="font-bold text-slate-800 text-sm bg-white border border-blue-500 rounded px-2 py-1 w-full mr-2"
+                       value={editingListTitle}
+                       onChange={e => setEditingListTitle(e.target.value)}
+                       onBlur={() => handleUpdateList(list.id, { title: editingListTitle })}
+                       onKeyDown={e => { if (e.key === 'Enter') handleUpdateList(list.id, { title: editingListTitle }); }}
+                    />
+                  ) : (
+                    <h3 
+                      className="font-bold text-slate-800 text-sm cursor-pointer hover:bg-slate-300/30 px-2 py-1 rounded -ml-2 transition-colors flex-1"
+                      onDoubleClick={() => { setEditingListId(list.id); setEditingListTitle(list.title); }}
+                    >
+                      {list.title}
+                    </h3>
+                  )}
+                  
+                  <div className="flex items-center">
+                    <span className="text-slate-500 text-xs py-1 px-2 font-mono">
+                      {list.tasks.length}
+                    </span>
+                    <button 
+                      onClick={() => setActiveListMenuId(activeListMenuId === list.id ? null : list.id)}
+                      className="p-1.5 rounded hover:bg-slate-300/50 text-slate-500 transition-colors ml-1"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                    </button>
+                  </div>
                 </div>
+
+                {/* List Dropdown Menu */}
+                {activeListMenuId === list.id && (
+                  <div className="absolute top-12 right-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 z-50 py-1 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">List actions</span>
+                      <button onClick={() => setActiveListMenuId(null)} className="text-slate-400 hover:text-slate-600">
+                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                    <button 
+                      onClick={() => { setEditingListId(list.id); setEditingListTitle(list.title); setActiveListMenuId(null); }}
+                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                    >
+                      ✏️ Rename List
+                    </button>
+                    <div className="px-4 py-2 text-sm text-slate-700 flex items-center gap-2 border-b border-slate-100">
+                      🎨 Color: 
+                      {['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', 'transparent'].map(color => (
+                        <div 
+                           key={color} 
+                           onClick={() => { handleUpdateList(list.id, { color: color === 'transparent' ? null : color }); setActiveListMenuId(null); }}
+                           className="w-4 h-4 rounded-full cursor-pointer hover:scale-110 shadow-sm border border-slate-200"
+                           style={{ background: color === 'transparent' ? '#fff' : color }}
+                        />
+                      ))}
+                    </div>
+                    <button 
+                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                    >
+                      📦 Archive List
+                    </button>
+                    <button 
+                      onClick={() => { handleDeleteList(list.id); setActiveListMenuId(null); }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                      🗑️ Delete List
+                    </button>
+                  </div>
+                )}
                 
                 <Droppable droppableId={list.id}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`px-3 pt-3 pb-1 flex-1 overflow-y-auto space-y-3 transition-colors ${
-                        snapshot.isDraggingOver ? 'bg-blue-50/50' : ''
+                      className={`px-3 py-1 flex-1 overflow-y-auto space-y-2 min-h-[50px] transition-colors rounded-b-xl ${
+                        snapshot.isDraggingOver ? 'bg-slate-300/30' : ''
                       }`}
                     >
                       {list.tasks.map((task, index) => (
@@ -247,6 +354,7 @@ export function Board() {
                           index={index}
                           onDelete={handleDeleteTask}
                           onProgressChange={handleProgressChange}
+                          onClick={() => setSelectedTask(task)}
                         />
                       ))}
                       {provided.placeholder}
@@ -254,20 +362,20 @@ export function Board() {
                   )}
                 </Droppable>
                 
-                <div className="p-3 border-t border-slate-200/50">
+                <div className="p-2 pb-3 mx-2 mt-1 rounded-b-xl text-slate-500">
                   <button 
                     onClick={() => setAddingTaskToListId(list.id)}
-                    className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-slate-400 text-xs font-semibold hover:bg-white/50 hover:border-slate-400 hover:text-slate-500 transition-all"
+                    className="w-full py-2 px-3 text-left rounded-lg text-sm font-medium hover:bg-slate-300/50 hover:text-slate-700 transition-all flex items-center gap-2"
                   >
-                    + Add Card
+                    <span>+</span> Add a card
                   </button>
                 </div>
               </div>
             ))}
 
-            <div className="w-[280px] flex-shrink-0">
+            <div className="w-[300px] sm:w-[320px] flex-shrink-0">
               {isAddingList ? (
-                <div className="bg-slate-200/50 p-4 rounded-2xl border border-slate-200/60 shadow-sm transition-all duration-200 scale-100">
+                <div className="bg-[#f1f2f4] p-3 rounded-xl shadow-sm transition-all duration-200">
                   <input
                     autoFocus
                     className="w-full p-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3 text-sm font-medium text-slate-700 shadow-inner"
@@ -297,12 +405,9 @@ export function Board() {
               ) : (
                 <button 
                   onClick={() => setIsAddingList(true)}
-                  className="w-full p-4 bg-slate-200/40 border-2 border-dashed border-slate-300 rounded-2xl text-slate-400 font-bold hover:bg-slate-200/60 hover:border-slate-400 hover:text-slate-500 transition-all flex items-center justify-center gap-2 group"
+                  className="w-full p-3 bg-white/50 backdrop-blur-sm border border-transparent rounded-xl text-slate-800 font-bold hover:bg-white hover:shadow-sm transition-all flex items-center justify-start gap-2 group text-sm"
                 >
-                  <div className="bg-white/50 p-1 rounded-lg group-hover:bg-white transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  </div>
-                  Add List
+                  <span className="text-xl leading-none px-1">+</span> Add another list
                 </button>
               )}
             </div>
@@ -347,7 +452,7 @@ export function Board() {
               </div>
 
               <div className="space-y-4 pt-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">TRU Estimation (1-5)</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">TRU Priority (1 = Low, 3 = High)</label>
                 
                 {[
                   { label: 'Technicality', key: 'T', color: 'purple' },
@@ -358,13 +463,17 @@ export function Board() {
                     <div className={`w-28 text-[10px] font-bold text-${tru.color}-600 bg-${tru.color}-50 px-2 py-1 rounded-full uppercase tracking-tighter`}>
                       {tru.label}
                     </div>
-                    <input 
-                      type="range" min="1" max="5" step="1"
-                      className="flex-1 accent-blue-600"
-                      value={newTaskTRU[tru.key as keyof typeof newTaskTRU]}
-                      onChange={(e) => setNewTaskTRU({...newTaskTRU, [tru.key]: parseInt(e.target.value)})}
-                    />
-                    <span className="font-mono font-bold text-slate-700 w-4">{newTaskTRU[tru.key as keyof typeof newTaskTRU]}</span>
+                    <div className="flex gap-2 flex-1">
+                      {[1, 2, 3].map(val => (
+                        <button
+                          key={val}
+                          onClick={() => setNewTaskTRU({...newTaskTRU, [tru.key]: val})}
+                          className={`flex-1 py-1 text-sm font-bold rounded-md border ${newTaskTRU[tru.key as keyof typeof newTaskTRU] === val ? `bg-${tru.color}-500 border-${tru.color}-500 text-white` : 'bg-white border-slate-200 text-slate-500'}`}
+                        >
+                          {val}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -380,6 +489,18 @@ export function Board() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedTask && (
+        <TaskDetailModal 
+          task={selectedTask} 
+          onClose={() => setSelectedTask(null)} 
+          onTaskUpdated={(updatedTask) => {
+            // Update the task in the board lists without full refetch if we want, or just re-fetch lists.
+            fetchLists();
+            setSelectedTask(updatedTask);
+          }}
+        />
       )}
     </div>
   );

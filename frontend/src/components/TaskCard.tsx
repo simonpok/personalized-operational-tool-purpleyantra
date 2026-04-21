@@ -12,6 +12,14 @@ interface Task {
   progress: number;
   department?: { color: string, name: string };
   order: number;
+  dueDate?: string;
+  description?: string;
+  checklists?: { id: string, title: string, items: { isCompleted: boolean }[] }[];
+  attachments?: any[];
+  avgT?: number;
+  avgR?: number;
+  avgU?: number;
+  truOverall?: number;
 }
 
 interface TaskCardProps {
@@ -19,9 +27,10 @@ interface TaskCardProps {
   index: number;
   onDelete: (taskId: string) => void;
   onProgressChange: (taskId: string, newProgress: number) => void;
+  onClick: () => void;
 }
 
-export function TaskCard({ task, index, onDelete, onProgressChange }: TaskCardProps) {
+export function TaskCard({ task, index, onDelete, onProgressChange, onClick }: TaskCardProps) {
   const [localProgress, setLocalProgress] = useState(task.progress);
 
   const handlePointerUp = () => {
@@ -37,58 +46,115 @@ export function TaskCard({ task, index, onDelete, onProgressChange }: TaskCardPr
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className={`bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-3 hover:shadow-md transition-shadow relative overflow-hidden group ${
+          onClick={onClick}
+          className={`bg-white rounded-lg shadow-[0_1px_1px_rgba(9,30,66,0.25)] hover:bg-slate-50 cursor-pointer p-3 mb-2 relative group flex flex-col gap-2 ${
             snapshot.isDragging ? 'rotate-2 scale-105 shadow-xl ring-2 ring-blue-500/50 z-50' : ''
           }`}
         >
           {task.department && (
             <div 
-              className="absolute top-0 left-0 w-1 h-full" 
+              className="w-10 h-2 rounded-full mb-1" 
               style={{ backgroundColor: task.department.color }}
             />
           )}
           
-          <div className="flex justify-between items-start mb-3">
-            <h4 className="font-semibold text-slate-800 text-sm leading-tight pl-2">{task.title}</h4>
+          <div className="flex justify-between items-start">
+            <h4 className="text-[#172b4d] text-sm leading-snug">{task.title}</h4>
             <button 
-              onClick={() => onDelete(task.id)}
-              className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+              onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+              className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 bg-white p-1 rounded-md"
               title="Delete Task"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
             </button>
           </div>
 
-          {/* TRU Score Badges */}
-          <div className="flex gap-2 mb-4 pl-2">
-            <div className="flex items-center gap-1 bg-purple-50 text-purple-700 font-mono text-[10px] px-1.5 py-0.5 rounded-full border border-purple-100 shadow-sm" title="Technicality">
-               T<span className="font-bold">{task.technicality}</span>
+          {/* Computed TRU Score Badges */}
+          {task.truOverall !== null && task.truOverall !== undefined ? (
+            <div className="flex gap-2 mb-4 pl-2">
+              <div className="flex flex-col gap-1 w-full bg-slate-50 border border-slate-100 rounded p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+                <div className="flex gap-1 justify-between">
+                  <div className="flex items-center gap-1 bg-purple-100 text-purple-800 font-mono text-[9px] px-1 py-0.5 rounded shadow-sm" title="Avg Technicality">
+                    T <span className="font-bold">{task.avgT?.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-cyan-100 text-cyan-800 font-mono text-[9px] px-1 py-0.5 rounded shadow-sm" title="Avg Regularity">
+                    R <span className="font-bold">{task.avgR?.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-orange-100 text-orange-800 font-mono text-[9px] px-1 py-0.5 rounded shadow-sm" title="Avg Urgency">
+                    U <span className="font-bold">{task.avgU?.toFixed(1)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5 px-0.5">
+                  <span className="font-semibold uppercase tracking-tighter">Overall TRU:</span>
+                  <div className="font-bold bg-slate-800 text-white rounded px-1.5 shadow-sm">● {task.truOverall.toFixed(1)}</div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-1 bg-cyan-50 text-cyan-700 font-mono text-[10px] px-1.5 py-0.5 rounded-full border border-cyan-100 shadow-sm" title="Regularity">
-               R<span className="font-bold">{task.regularity}</span>
+          ) : (
+            <div className="flex gap-2 mb-4 pl-2 opacity-50 grayscale">
+              <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-100 rounded p-1.5 text-[9px] font-bold text-slate-400">
+                No TRU Score Items
+              </div>
             </div>
-            <div className="flex items-center gap-1 bg-orange-50 text-orange-700 font-mono text-[10px] px-1.5 py-0.5 rounded-full border border-orange-100 shadow-sm" title="Urgency">
-               U<span className="font-bold">{task.urgency}</span>
-            </div>
-            <div className="ml-auto flex items-center font-bold text-[10px] bg-slate-800 text-white shadow-sm px-1.5 py-0.5 rounded">
-               {task.truScore.toFixed(1)}
-            </div>
-          </div>
+          )}
 
-          {/* Progress Slider */}
-          <div className="pl-2 relative z-10">
-            <div className="flex justify-between text-[10px] text-slate-500 mb-1 font-semibold uppercase tracking-wider">
-              <span>Progress</span>
-              <span className="font-mono">{localProgress}%</span>
+          {/* Badges Row */}
+          <div className="flex flex-wrap gap-2 text-slate-500 items-center pl-2">
+            
+            {task.dueDate && (() => {
+               const due = new Date(task.dueDate);
+               const now = new Date();
+               const diffH = (due.getTime() - now.getTime()) / (1000 * 3600);
+               const isOverdue = diffH < 0;
+               const isDueSoon = diffH >= 0 && diffH <= 24;
+               
+               let style = 'bg-slate-100 text-slate-600';
+               let icon = '📅';
+               if (isOverdue) { style = 'bg-red-500 text-white font-bold'; icon = '🔴'; }
+               else if (isDueSoon) { style = 'bg-amber-400 text-amber-900 font-bold'; icon = '🟡'; }
+               
+               return (
+                 <div className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shadow-sm ${style}`}>
+                    {icon} {due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                 </div>
+               );
+            })()}
+
+            {task.description && (
+               <div title="This card has a description" className="flex items-center">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+               </div>
+            )}
+
+            {task.checklists && task.checklists.length > 0 && (() => {
+              let totalItems = 0;
+              let checkedItems = 0;
+              task.checklists.forEach(c => {
+                totalItems += c.items.length;
+                checkedItems += c.items.filter(i => i.isCompleted).length;
+              });
+              if (totalItems === 0) return null;
+              const isAllChecked = checkedItems === totalItems;
+              return (
+                <div className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded ${isAllChecked ? 'bg-green-500 text-white font-bold' : ''}`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  {checkedItems}/{totalItems}
+                </div>
+              );
+            })()}
+
+            {task.attachments && task.attachments.length > 0 && (
+               <div className="flex items-center gap-1 text-[11px]">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                  {task.attachments.length}
+               </div>
+            )}
+
+            {/* Stacked avatars Mockup right aligned */}
+            <div className="ml-auto flex -space-x-1.5">
+               <div className="w-5 h-5 rounded-full bg-blue-500 border border-white flex items-center justify-center text-[8px] font-bold text-white shadow-sm">U</div>
+               <div className="w-5 h-5 rounded-full bg-indigo-500 border border-white flex items-center justify-center text-[8px] font-bold text-white shadow-sm">P</div>
             </div>
-            <input 
-              type="range" 
-              min="0" max="100" 
-              value={localProgress} 
-              onChange={(e) => setLocalProgress(parseInt(e.target.value))}
-              onPointerUp={handlePointerUp}
-              className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            />
           </div>
         </div>
       )}
