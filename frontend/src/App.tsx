@@ -207,23 +207,7 @@ function Dashboard() {
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.departments.map(dept => (
-          <div key={dept.id} className="bg-card p-6 rounded-2xl border border-border shadow-sm border-t-4 hover:shadow-md transition-all group" style={{ borderTopColor: dept.color }}>
-            <h3 className="font-bold text-slate-700 mb-4 group-hover:text-primaryText transition-colors">{dept.name}</h3>
-            <div className="w-full bg-slate-100 rounded-full h-3 mb-3 overflow-hidden">
-              <div 
-                className="h-full rounded-full transition-all duration-1000 ease-out" 
-                style={{ width: `${dept.progress}%`, backgroundColor: dept.color }}
-              ></div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">Department Progress</span>
-              <span className="text-sm font-mono font-bold text-mutedText">{dept.progress}%</span>
-            </div>
-          </div>
-        ))}
-      </div>
+
     </div>
   );
 }

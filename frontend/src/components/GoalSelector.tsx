@@ -180,6 +180,7 @@ export function GoalSelector({ goals, currentGoalId, onDeleteGoal, onAddGoal }: 
               </React.Fragment>
             ))}
 
+
             {/* Add Goal / Form */}
             {isAdding ? (
               <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border-2 border-blue-200 dark:border-blue-900 p-3 rounded-2xl shadow-lg ring-4 ring-blue-50 dark:ring-blue-900/30 animate-in zoom-in-95 duration-200">
