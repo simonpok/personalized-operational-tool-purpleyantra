@@ -438,45 +438,7 @@ export function Board() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Department</label>
-                <select 
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium appearance-none"
-                  value={newTaskDeptId}
-                  onChange={(e) => setNewTaskDeptId(e.target.value)}
-                >
-                  {departments.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
 
-              <div className="space-y-4 pt-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">TRU Priority (1 = Low, 3 = High)</label>
-                
-                {[
-                  { label: 'Technicality', key: 'T', color: 'purple' },
-                  { label: 'Regularity', key: 'R', color: 'cyan' },
-                  { label: 'Urgency', key: 'U', color: 'orange' }
-                ].map((tru) => (
-                  <div key={tru.key} className="flex items-center gap-4">
-                    <div className={`w-28 text-[10px] font-bold text-${tru.color}-600 bg-${tru.color}-50 px-2 py-1 rounded-full uppercase tracking-tighter`}>
-                      {tru.label}
-                    </div>
-                    <div className="flex gap-2 flex-1">
-                      {[1, 2, 3].map(val => (
-                        <button
-                          key={val}
-                          onClick={() => setNewTaskTRU({...newTaskTRU, [tru.key]: val})}
-                          className={`flex-1 py-1 text-sm font-bold rounded-md border ${newTaskTRU[tru.key as keyof typeof newTaskTRU] === val ? `bg-${tru.color}-500 border-${tru.color}-500 text-white` : 'bg-white border-slate-200 text-slate-500'}`}
-                        >
-                          {val}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
 
             <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex gap-3">
