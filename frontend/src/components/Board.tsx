@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../hooks/useSocket';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { TaskCard } from './TaskCard';
@@ -48,7 +48,7 @@ interface List {
 }
 
 export function Board() {
-  const { goalId } = useParams();
+  const { goalId, boardId } = useParams();
   const [lists, setLists] = useState<List[]>([]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [goalTitle, setGoalTitle] = useState('');
@@ -66,12 +66,15 @@ export function Board() {
   const [activeListMenuId, setActiveListMenuId] = useState<string | null>(null);
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editingListTitle, setEditingListTitle] = useState('');
+  const [boardName, setBoardName] = useState('');
+  const [isEditingBoardName, setIsEditingBoardName] = useState(false);
+  const navigate = useNavigate();
 
   const { isConnected, emit, on } = useSocket();
 
   const fetchLists = async () => {
     try {
-      const res = await fetch(`http://localhost:3001/api/lists?goalId=${goalId}`);
+      const res = await fetch(`http://localhost:3001/api/lists?boardId=${boardId}&goalId=${goalId}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         const defaultSorted = data.map(list => {
@@ -108,10 +111,22 @@ export function Board() {
     }
   };
 
+  const fetchBoardData = async () => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/boards/${boardId}`);
+      const data = await res.json();
+      if (data && !data.error) {
+        setBoardName(data.name);
+      }
+    } catch (e) {
+      console.error('Failed to fetch board data', e);
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
-      await Promise.all([fetchLists(), fetchGoalData()]);
+      await Promise.all([fetchLists(), fetchGoalData(), fetchBoardData()]);
       setIsLoading(false);
     };
     init();
@@ -131,7 +146,7 @@ export function Board() {
       offProgress();
       offBoard();
     };
-  }, [on, goalId]);
+  }, [on, goalId, boardId]);
 
   const onDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -244,7 +259,7 @@ export function Board() {
   };
 
   const handleAddList = async () => {
-    if (!newListTitle.trim() || !goalId) {
+    if (!newListTitle.trim() || !boardId) {
       setIsAddingList(false);
       return;
     }
@@ -252,7 +267,7 @@ export function Board() {
       const res = await fetch('http://localhost:3001/api/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newListTitle, goalId })
+        body: JSON.stringify({ title: newListTitle, boardId })
       });
       if (res.ok) {
         setNewListTitle('');
@@ -295,12 +310,74 @@ export function Board() {
     }
   };
 
+  const handleRenameBoard = async () => {
+    if (!boardName.trim() || !boardId) return;
+    try {
+      const res = await fetch(`http://localhost:3001/api/boards/${boardId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: boardName })
+      });
+      if (res.ok) {
+        setIsEditingBoardName(false);
+        // Dispatch custom event to notify sidebar
+        window.dispatchEvent(new CustomEvent('board:updated'));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteBoard = async () => {
+    if (!window.confirm("Are you sure you want to delete this board? This will permanently delete all its lists and tasks.")) return;
+    try {
+      const res = await fetch(`http://localhost:3001/api/boards/${boardId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        window.dispatchEvent(new CustomEvent('board:updated'));
+        navigate(`/goal/${goalId}/dashboard`);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="p-8 h-screen bg-slate-50 flex flex-col font-sans overflow-hidden">
       <div className="flex justify-between items-center mb-8 bg-white shadow-sm border border-slate-200 p-4 rounded-xl flex-shrink-0">
         <div className="flex items-center gap-4">
           <div>
-            <h2 className="text-2xl font-bold font-mono tracking-tight text-slate-800 uppercase">Operational Board</h2>
+            {isEditingBoardName ? (
+              <input 
+                type="text"
+                className="text-2xl font-bold font-mono tracking-tight text-slate-800 uppercase border-b-2 border-blue-500 focus:outline-none bg-transparent"
+                value={boardName}
+                onChange={e => setBoardName(e.target.value)}
+                onBlur={handleRenameBoard}
+                onKeyDown={e => e.key === 'Enter' && handleRenameBoard()}
+                autoFocus
+              />
+            ) : (
+              <div className="flex items-center gap-3 group">
+                <h2 className="text-2xl font-bold font-mono tracking-tight text-slate-800 uppercase">
+                  {boardName || 'Operational Board'}
+                </h2>
+                <button 
+                  onClick={() => setIsEditingBoardName(true)}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded transition-all text-slate-400 hover:text-blue-600"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button 
+                  onClick={handleDeleteBoard}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded transition-all text-slate-400 hover:text-red-500"
+                  title="Delete Board"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                </button>
+              </div>
+            )}
             <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">{goalTitle}</p>
           </div>
           <div className="text-xs text-slate-500 font-mono flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full">

@@ -13,6 +13,7 @@ model Project {
   description String?
   isArchived  Boolean      @default(false)
   goals       Goal[]
+  boards      Board[]
   departments Department[]
   createdAt   DateTime     @default(now())
 }
@@ -25,7 +26,6 @@ model Goal {
   order       Int      @default(0)
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lists       BoardList[]
   tasks       Task[]
   progress    Float    @default(0)
   isArchived  Boolean  @default(false)
@@ -42,13 +42,22 @@ model Department {
   color     String  // hex color for UI
 }
 
+model Board {
+  id        String      @id @default(cuid())
+  name      String
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lists     BoardList[]
+  createdAt DateTime    @default(now())
+}
+
 model BoardList {
   id        String   @id @default(cuid())
   title     String
   order     Int
-  goalId    String
+  boardId   String
   color     String?  // left border accent color
-  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
   tasks     Task[]
 }
 

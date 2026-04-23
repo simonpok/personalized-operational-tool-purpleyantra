@@ -143,10 +143,17 @@ app.post('/api/projects', async (req, res) => {
         }
       });
 
+      const board = await tx.board.create({
+        data: {
+          name: 'Ops Board',
+          projectId: project.id
+        }
+      });
+
       await Promise.all([
-        tx.boardList.create({ data: { title: 'Backlog', order: 0, goalId: goal.id } }),
-        tx.boardList.create({ data: { title: 'Doing', order: 1, goalId: goal.id } }),
-        tx.boardList.create({ data: { title: 'Done', order: 2, goalId: goal.id } })
+        tx.boardList.create({ data: { title: 'Backlog', order: 0, boardId: board.id } }),
+        tx.boardList.create({ data: { title: 'Doing', order: 1, boardId: board.id } }),
+        tx.boardList.create({ data: { title: 'Done', order: 2, boardId: board.id } })
       ]);
 
       return { project, goal };
@@ -246,6 +253,7 @@ app.get('/api/stats/:goalId', async (req, res) => {
       : 0;
 
     res.json({
+      projectId: goal.project.id,
       projectName: goal.project.name,
       goalTitle: goal.title,
       s1: goal.s1,
@@ -259,19 +267,95 @@ app.get('/api/stats/:goalId', async (req, res) => {
   }
 });
 
+// --- Board Routes ---
+
+// Fetch boards for a project
+app.get('/api/projects/:id/boards', async (req, res) => {
+  try {
+    const boards = await prisma.board.findMany({
+      where: { projectId: req.params.id },
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json(boards);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch boards' });
+  }
+});
+
+// Create a new board
+app.post('/api/boards', async (req, res) => {
+  try {
+    const { name, projectId } = req.body;
+    const board = await prisma.board.create({
+      data: { name, projectId }
+    });
+    
+    // Create default lists
+    await prisma.boardList.createMany({
+      data: [
+        { title: 'Backlog', order: 0, boardId: board.id },
+        { title: 'In Progress', order: 1, boardId: board.id },
+        { title: 'Done', order: 2, boardId: board.id }
+      ]
+    });
+    
+    res.json(board);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to create board' });
+  }
+});
+
+// Get a specific board
+app.get('/api/boards/:id', async (req, res) => {
+  try {
+    const board = await prisma.board.findUnique({
+      where: { id: req.params.id }
+    });
+    res.json(board);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch board' });
+  }
+});
+
+// Update a board
+app.put('/api/boards/:id', async (req, res) => {
+  try {
+    const board = await prisma.board.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    res.json(board);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update board' });
+  }
+});
+
+// Delete a board
+app.delete('/api/boards/:id', async (req, res) => {
+  try {
+    await prisma.board.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ message: 'Board deleted' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete board' });
+  }
+});
+
 // --- Kanban Routes ---
 
-// Fetch all lists for a goal
+// Fetch all lists for a board
 app.get('/api/lists', async (req, res) => {
   try {
-    const { goalId } = req.query;
-    if (!goalId) return res.status(400).json({ error: 'goalId is required' });
+    const { boardId, goalId } = req.query;
+    if (!boardId) return res.status(400).json({ error: 'boardId is required' });
 
     const lists = await prisma.boardList.findMany({
-      where: { goalId: String(goalId), goal: { isArchived: false } },
+      where: { boardId: String(boardId) },
       orderBy: { order: 'asc' },
       include: {
         tasks: {
+          where: goalId ? { goalId: String(goalId) } : undefined,
           orderBy: { order: 'asc' },
           include: { 
             department: true,
@@ -292,12 +376,12 @@ app.get('/api/lists', async (req, res) => {
 // Create a new list
 app.post('/api/lists', async (req, res) => {
   try {
-    const { goalId, title } = req.body;
-    const count = await prisma.boardList.count({ where: { goalId: String(goalId) } });
+    const { boardId, title } = req.body;
+    const count = await prisma.boardList.count({ where: { boardId: String(boardId) } });
     const newList = await prisma.boardList.create({
       data: {
         title,
-        goalId: String(goalId),
+        boardId: String(boardId),
         order: count
       }
     });
@@ -338,15 +422,8 @@ app.post('/api/goals', async (req, res) => {
       data: { projectId, title, s1, s2, order }
     });
     
-    // Create default lists for the new goal
-    await prisma.boardList.createMany({
-      data: [
-        { title: 'Backlog', order: 0, goalId: newGoal.id },
-        { title: 'In Progress', order: 1, goalId: newGoal.id },
-        { title: 'Done', order: 2, goalId: newGoal.id }
-      ]
-    });
-
+    // Create a default board for the new goal? No, boards are at project level.
+    // We shouldn't create lists when creating a goal anymore, since lists belong to boards.
     res.json(newGoal);
   } catch (e) {
     res.status(500).json({ error: 'Failed to create goal' });
@@ -676,11 +753,18 @@ app.post('/api/seed', async (req, res) => {
         }
       });
 
-      // Create lists for Goal 1
+      const board = await tx.board.create({
+        data: {
+          name: 'Ops Board',
+          projectId: project.id
+        }
+      });
+
+      // Create lists for Board
       const listsG1 = await Promise.all([
-        tx.boardList.create({ data: { title: 'Backlog', order: 0, goalId: goal1.id } }),
-        tx.boardList.create({ data: { title: 'Doing', order: 1, goalId: goal1.id } }),
-        tx.boardList.create({ data: { title: 'Done', order: 2, goalId: goal1.id } })
+        tx.boardList.create({ data: { title: 'Backlog', order: 0, boardId: board.id } }),
+        tx.boardList.create({ data: { title: 'Doing', order: 1, boardId: board.id } }),
+        tx.boardList.create({ data: { title: 'Done', order: 2, boardId: board.id } })
       ]);
 
       await tx.task.createMany({
