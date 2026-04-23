@@ -13,13 +13,14 @@ interface Task {
   department?: { color: string, name: string };
   order: number;
   dueDate?: string;
-  description?: string;
+
   checklists?: { id: string, title: string, items: { isCompleted: boolean }[] }[];
   attachments?: any[];
   avgT?: number;
   avgR?: number;
   avgU?: number;
   truOverall?: number;
+  labels?: string;
 }
 
 interface TaskCardProps {
@@ -51,11 +52,14 @@ export function TaskCard({ task, index, onDelete, onProgressChange, onClick }: T
             snapshot.isDragging ? 'rotate-2 scale-105 shadow-xl ring-2 ring-blue-500/50 z-50' : ''
           }`}
         >
-          {task.department && (
-            <div 
-              className="w-10 h-2 rounded-full mb-1" 
-              style={{ backgroundColor: task.department.color }}
-            />
+
+
+          {task.labels && JSON.parse(task.labels).length > 0 && (
+             <div className="flex flex-wrap gap-1 mb-1">
+                {JSON.parse(task.labels).map((c: string) => (
+                   <div key={c} className="h-2 w-10 rounded-full" style={{ backgroundColor: c }}></div>
+                ))}
+             </div>
           )}
           
           <div className="flex justify-between items-start">
@@ -71,30 +75,14 @@ export function TaskCard({ task, index, onDelete, onProgressChange, onClick }: T
 
           {/* Computed TRU Score Badges */}
           {task.truOverall !== null && task.truOverall !== undefined ? (
-            <div className="flex gap-2 mb-4 pl-2">
-              <div className="flex flex-col gap-1 w-full bg-slate-50 border border-slate-100 rounded p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
-                <div className="flex gap-1 justify-between">
-                  <div className="flex items-center gap-1 bg-purple-100 text-purple-800 font-mono text-[9px] px-1 py-0.5 rounded shadow-sm" title="Avg Technicality">
-                    T <span className="font-bold">{task.avgT?.toFixed(1)}</span>
-                  </div>
-                  <div className="flex items-center gap-1 bg-cyan-100 text-cyan-800 font-mono text-[9px] px-1 py-0.5 rounded shadow-sm" title="Avg Regularity">
-                    R <span className="font-bold">{task.avgR?.toFixed(1)}</span>
-                  </div>
-                  <div className="flex items-center gap-1 bg-orange-100 text-orange-800 font-mono text-[9px] px-1 py-0.5 rounded shadow-sm" title="Avg Urgency">
-                    U <span className="font-bold">{task.avgU?.toFixed(1)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5 px-0.5">
-                  <span className="font-semibold uppercase tracking-tighter">Overall TRU:</span>
-                  <div className="font-bold bg-slate-800 text-white rounded px-1.5 shadow-sm">● {task.truOverall.toFixed(1)}</div>
-                </div>
-              </div>
+            <div className="flex gap-2 mb-3 pl-2">
+              <span className="bg-slate-800 text-white text-[11px] font-bold px-2 py-1 rounded shadow-sm">
+                T{task.avgT != null ? task.avgT.toFixed(1).replace(/\.0$/, '') : '-'}, R{task.avgR != null ? task.avgR.toFixed(1).replace(/\.0$/, '') : '-'}, U{task.avgU != null ? task.avgU.toFixed(1).replace(/\.0$/, '') : '-'}
+              </span>
             </div>
           ) : (
-            <div className="flex gap-2 mb-4 pl-2 opacity-50 grayscale">
-              <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-100 rounded p-1.5 text-[9px] font-bold text-slate-400">
-                No TRU Score Items
-              </div>
+            <div className="flex gap-2 mb-3 pl-2 opacity-50 grayscale">
+              <span className="text-[10px] font-bold text-slate-400">No TRU Score Items</span>
             </div>
           )}
 

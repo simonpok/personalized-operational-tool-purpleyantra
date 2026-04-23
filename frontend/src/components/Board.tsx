@@ -74,7 +74,18 @@ export function Board() {
       const res = await fetch(`http://localhost:3001/api/lists?goalId=${goalId}`);
       const data = await res.json();
       if (Array.isArray(data)) {
-        setLists(data);
+        const defaultSorted = data.map(list => {
+          const sortedTasks = [...list.tasks].sort((a: any, b: any) => {
+            if (!a.dueDate && !b.dueDate) return a.order - b.order;
+            if (!a.dueDate) return 1;
+            if (!b.dueDate) return -1;
+            const diff = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            if (diff === 0) return a.order - b.order;
+            return diff;
+          });
+          return { ...list, tasks: sortedTasks };
+        });
+        setLists(defaultSorted);
       }
     } catch (e) {
       console.error('Failed to fetch lists', e);
@@ -198,14 +209,59 @@ export function Board() {
     }
   };
 
+  const handleSortList = async (listId: string, sortType: 'date' | 'alpha') => {
+    setActiveListMenuId(null);
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+
+    const sortedTasks = [...list.tasks].sort((a, b) => {
+      if (sortType === 'date') {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      } else {
+        return a.title.localeCompare(b.title);
+      }
+    });
+
+    // Update locally
+    const newLists = lists.map(l => l.id === listId ? { ...l, tasks: sortedTasks } : l);
+    setLists(newLists);
+
+    try {
+      await Promise.all(sortedTasks.map((t, index) =>
+        fetch(`http://localhost:3001/api/tasks/${t.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: index })
+        })
+      ));
+      fetchLists();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleAddList = async () => {
     if (!newListTitle.trim() || !goalId) {
       setIsAddingList(false);
       return;
     }
-    // Note: In refined backend, lists are created per goal
-    // We'll update the API call to use goalId
-    // ...
+    try {
+      const res = await fetch('http://localhost:3001/api/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newListTitle, goalId })
+      });
+      if (res.ok) {
+        setNewListTitle('');
+        setIsAddingList(false);
+        fetchLists();
+      }
+    } catch (error) {
+      console.error('Failed to create list:', error);
+    }
   };
 
   const handleAddTask = async () => {
@@ -324,6 +380,18 @@ export function Board() {
                         />
                       ))}
                     </div>
+                    <button 
+                       onClick={() => handleSortList(list.id, 'date')}
+                       className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2 border-t border-slate-100"
+                     >
+                       📅 Sort by Date
+                     </button>
+                     <button 
+                       onClick={() => handleSortList(list.id, 'alpha')}
+                       className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2 border-b border-slate-100"
+                     >
+                       🔤 Sort Alphabetically
+                     </button>
                     <button 
                       className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
                     >

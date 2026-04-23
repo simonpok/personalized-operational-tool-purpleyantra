@@ -4,6 +4,7 @@ import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-reac
 import { Board } from './components/Board';
 import { GoalSelector } from './components/GoalSelector';
 import { ThemeToggle } from './components/ThemeToggle';
+import { ProjectsList } from './components/ProjectsList';
 import React from 'react';
 import { io } from 'socket.io-client';
 
@@ -14,6 +15,7 @@ interface Goal {
   s2: string;
   progress: number;
   order: number;
+  projectId?: string;
 }
 
 const MissionContext = createContext<{
@@ -67,7 +69,7 @@ function ProjectSidebar() {
 
       <div className="p-4 flex-1 flex flex-col overflow-hidden">
         {/* Header Area */}
-        <div className={`mb-8 mt-2 flex items-center gap-3 ${isExpanded ? '' : 'justify-center'}`}>
+        <div className={`mb-6 mt-2 flex items-center gap-3 ${isExpanded ? '' : 'justify-center'}`}>
           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
           </div>
@@ -83,6 +85,14 @@ function ProjectSidebar() {
 
         {/* Links Area */}
         <nav className="flex flex-col gap-2">
+          <Link 
+            to={`/`} 
+            className="flex items-center gap-3 px-3 py-3 rounded-xl font-bold text-sm text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all group/link overflow-hidden mb-2 bg-slate-50 border-slate-100"
+            title="All Projects"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400 group-hover/link:text-blue-500 transition-colors flex-shrink-0"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span className={`${isExpanded ? 'opacity-100' : 'opacity-0 w-0'} transition-opacity duration-300 whitespace-nowrap`}>All Projects</span>
+          </Link>
           {/* Active styling logic could be added using useLocation, but using hover styles for simplicity. */}
           <Link 
             to={`/goal/${goalId}/dashboard`} 
@@ -213,7 +223,7 @@ function Dashboard() {
 }
 
 function TrashView() {
-  const [archived, setArchived] = useState<any[]>([]);
+  const [archived, setArchived] = useState<{goals: any[], projects: any[]}>({ goals: [], projects: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -223,25 +233,39 @@ function TrashView() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleRestore = async (id: string) => {
+  const handleRestoreGoal = async (id: string) => {
     const res = await fetch(`http://localhost:3001/api/goals/${id}/restore`, { method: 'PUT' });
     if (res.ok) {
-      setArchived(archived.filter(g => g.id !== id));
+      setArchived({ ...archived, goals: archived.goals.filter(g => g.id !== id) });
       window.location.reload(); 
     }
   };
 
-  const handlePurge = async (id: string) => {
+  const handlePurgeGoal = async (id: string) => {
     if (window.confirm("ARE YOU SURE? This will permanently delete all tasks in this phase forever.")) {
       const res = await fetch(`http://localhost:3001/api/goals/${id}/purge`, { method: 'DELETE' });
-      if (res.ok) setArchived(archived.filter(g => g.id !== id));
+      if (res.ok) setArchived({ ...archived, goals: archived.goals.filter(g => g.id !== id) });
+    }
+  };
+
+  const handleRestoreProject = async (id: string) => {
+    const res = await fetch(`http://localhost:3001/api/projects/${id}/restore`, { method: 'PUT' });
+    if (res.ok) {
+      setArchived({ ...archived, projects: archived.projects.filter(p => p.id !== id) });
+    }
+  };
+
+  const handlePurgeProject = async (id: string) => {
+    if (window.confirm("ARE YOU SURE? This will permanently delete the entire project and all its phases and tasks forever.")) {
+      const res = await fetch(`http://localhost:3001/api/projects/${id}/purge`, { method: 'DELETE' });
+      if (res.ok) setArchived({ ...archived, projects: archived.projects.filter(p => p.id !== id) });
     }
   };
 
   const handlePurgeAll = async () => {
     if (window.confirm("CRITICAL ACTION: Permanently delete ALL items in the trash? This cannot be undone.")) {
       const res = await fetch(`http://localhost:3001/api/trash/purge-all`, { method: 'DELETE' });
-      if (res.ok) setArchived([]);
+      if (res.ok) setArchived({ goals: [], projects: [] });
     }
   };
 
@@ -257,30 +281,60 @@ function TrashView() {
           <h1 className="text-3xl font-black uppercase tracking-tighter mb-1">Archive Chamber</h1>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em]">Decommissioned Mission Phases</p>
         </div>
-        {archived.length > 0 && (
+        {archived.goals.length > 0 || archived.projects.length > 0 ? (
           <button 
             onClick={handlePurgeAll}
             className="relative z-10 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300"
           >
             Purge All Data
           </button>
-        )}
+        ) : null}
       </div>
 
-      {archived.length === 0 ? (
+      {archived.goals.length === 0 && archived.projects.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-100">
           <div className="text-slate-300 text-4xl mb-4">📭</div>
           <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Nothing in the trash</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {archived.map(goal => (
+          {archived.projects.map(project => (
+            <div key={project.id} className="bg-white p-8 rounded-[1.5rem] border border-orange-100 flex justify-between items-center shadow-xl shadow-slate-200/40 hover:scale-[1.01] transition-all duration-300 group">
+              <div className="flex items-center gap-6">
+                <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-300 group-hover:bg-red-50 group-hover:text-red-300 transition-colors">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-orange-400 uppercase tracking-widest mb-1">Project</div>
+                  <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight mb-1">{project.name}</h3>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => handleRestoreProject(project.id)}
+                  className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30"
+                >
+                  Restore Project
+                </button>
+                <button 
+                  onClick={() => handlePurgeProject(project.id)}
+                  className="bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-100 hover:border-red-100 px-4 py-3 rounded-xl transition-all"
+                  title="Purge Permanently"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {archived.goals.map(goal => (
             <div key={goal.id} className="bg-white p-8 rounded-[1.5rem] border border-slate-100 flex justify-between items-center shadow-xl shadow-slate-200/40 hover:scale-[1.01] transition-all duration-300 group">
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 group-hover:bg-red-50 group-hover:text-red-300 transition-colors">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                 </div>
                 <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Phase</div>
                   <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight mb-1">{goal.title}</h3>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{goal.s1}</span>
@@ -291,13 +345,13 @@ function TrashView() {
               </div>
               <div className="flex gap-3">
                 <button 
-                  onClick={() => handleRestore(goal.id)}
+                  onClick={() => handleRestoreGoal(goal.id)}
                   className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30"
                 >
                   Restore Phase
                 </button>
                 <button 
-                  onClick={() => handlePurge(goal.id)}
+                  onClick={() => handlePurgeGoal(goal.id)}
                   className="bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-100 hover:border-red-100 px-4 py-3 rounded-xl transition-all"
                   title="Purge Permanently"
                 >
@@ -411,7 +465,14 @@ const GoalLayout = ({ children }: { children: React.ReactNode }) => {
     fetch('http://localhost:3001/api/projects')
       .then(res => res.json())
       .then(data => {
-        if (data.length > 0) setGoals(data[0].goals);
+        let foundGoals: Goal[] = [];
+        for (const project of data) {
+          if (project.goals && project.goals.some((g: any) => g.id === goalId)) {
+            foundGoals = project.goals;
+            break;
+          }
+        }
+        setGoals(foundGoals);
       });
   };
 
@@ -499,7 +560,7 @@ export default function App() {
     <div className="min-h-screen bg-background dark:bg-slate-950 transition-colors duration-300">
       <ThemeToggle />
       <Routes>
-        <Route path="/" element={<Launcher />} />
+        <Route path="/" element={<ProjectsList />} />
         <Route path="/goal/:goalId/dashboard" element={<GoalLayout><Dashboard /></GoalLayout>} />
         <Route path="/goal/:goalId/board" element={<GoalLayout><Board /></GoalLayout>} />
         <Route path="/goal/:goalId/trash" element={<GoalLayout><TrashView /></GoalLayout>} />

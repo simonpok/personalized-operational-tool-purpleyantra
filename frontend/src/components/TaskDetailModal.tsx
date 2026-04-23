@@ -14,6 +14,12 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
   const [isAddingChecklist, setIsAddingChecklist] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   
+  const [isLabelsOpen, setIsLabelsOpen] = useState(false);
+  const [isDatesOpen, setIsDatesOpen] = useState(false);
+  const [tempDate, setTempDate] = useState('');
+  
+  const AVAILABLE_COLORS = ['#4bce97', '#e2b203', '#faa53d', '#f87462', '#9f8fef', '#579dff'];
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Re-sync local state if prop updates
@@ -98,8 +104,20 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
       });
       if (res.ok) {
         const updatedItem = await res.json();
-        // Since backend recomputes task TRU, we might need a full task refresh. For now, local mutation + reload.
-        fetchTaskFresh(); 
+        
+        // Update local state
+        const updatedChecklists = localTask.checklists.map((cl: any) => {
+          if (cl.id === checklistId) {
+            return {
+              ...cl,
+              items: cl.items.map((i: any) => i.id === itemId ? updatedItem : i)
+            };
+          }
+          return cl;
+        });
+        const newTask = { ...localTask, checklists: updatedChecklists };
+        setLocalTask(newTask);
+        onTaskUpdated(newTask);
       }
     } catch (e) { console.error(e); }
   };
@@ -107,17 +125,16 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
   const deleteChecklistItem = async (itemId: string) => {
     try {
       await fetch(`http://localhost:3001/api/checklist-items/${itemId}`, { method: 'DELETE' });
-      fetchTaskFresh();
+      
+      // Update local state
+      const updatedChecklists = localTask.checklists.map((cl: any) => ({
+        ...cl,
+        items: cl.items.filter((i: any) => i.id !== itemId)
+      }));
+      const newTask = { ...localTask, checklists: updatedChecklists };
+      setLocalTask(newTask);
+      onTaskUpdated(newTask);
     } catch (e) { console.error(e); }
-  };
-
-  const fetchTaskFresh = async () => {
-    try {
-      // Small trick: We hit the board endpoint or a specific task endpoint.
-      // Since we only have /api/tasks (POST/PUT/DELETE), let's just trigger onTaskUpdated but we need to know the new stats.
-      // Easiest is to update the item locally first while fetching lists upstream.
-      onTaskUpdated(localTask); // Fallback: parent will fetchLists(), and prop will update shortly.
-    } catch (e) {}
   };
 
   // Attachments
@@ -181,6 +198,24 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
           {/* Left Panel - Main Content */}
           <div className="flex-[3] space-y-8 min-w-0">
             
+            {/* Labels display on modal */}
+            {localTask.labels && JSON.parse(localTask.labels).length > 0 && (
+              <div className="flex items-start gap-4 mb-2">
+                 <div className="w-6 hidden md:block"></div>
+                 <div className="flex-1">
+                    <h3 className={`text-xs font-bold text-slate-500 uppercase mb-2`}>Labels</h3>
+                    <div className="flex flex-wrap gap-2">
+                       {JSON.parse(localTask.labels).map((c: string) => (
+                          <div key={c} className="h-8 w-12 rounded flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity" style={{ backgroundColor: c }} onClick={() => setIsLabelsOpen(true)}></div>
+                       ))}
+                       <button onClick={() => setIsLabelsOpen(true)} className="h-8 w-8 flex items-center justify-center rounded bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition-colors">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                       </button>
+                    </div>
+                 </div>
+              </div>
+            )}
+
             {/* Description */}
             <div className="flex items-start gap-4">
               <svg className={`${textHeading} mt-1`} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
@@ -254,12 +289,24 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
               const completedItems = checklist.items.filter((i: any) => i.isCompleted).length;
               const progressPercentage = totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
 
+              const remT = checklist.items.filter((i: any) => !i.isCompleted && i.T).reduce((acc: number, i: any) => acc + i.T, 0);
+              const remR = checklist.items.filter((i: any) => !i.isCompleted && i.R).reduce((acc: number, i: any) => acc + i.R, 0);
+              const remU = checklist.items.filter((i: any) => !i.isCompleted && i.U).reduce((acc: number, i: any) => acc + i.U, 0);
+              const hasScoredItems = checklist.items.some((i: any) => i.T && i.R && i.U);
+
               return (
                 <div key={checklist.id} className="flex items-start gap-4">
                   <svg className={`${textHeading} mt-1`} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center mb-4">
-                       <h3 className={`text-lg font-bold ${textHeading}`}>{checklist.title}</h3>
+                       <div className="flex items-center gap-3">
+                         <h3 className={`text-lg font-bold ${textHeading}`}>{checklist.title}</h3>
+                         {hasScoredItems && (
+                           <span className="bg-slate-800 text-white text-[11px] font-bold px-2 py-1 rounded shadow-sm transition-all duration-300">
+                             T{remT}, R{remR}, U{remU}
+                           </span>
+                         )}
+                       </div>
                        <button className={`${bgBtn} px-3 py-1.5 rounded-md text-sm font-medium ${textHeading}`}>Delete</button>
                     </div>
                     
@@ -274,23 +321,22 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
                       {checklist.items.map((item: any) => (
                         <div key={item.id}>
                           {/* Item Display Row */}
-                          <div className={`flex items-start gap-3 hover:${bgBtn} p-2 rounded-md group transition-colors relative`}>
+                          <div className={`flex items-start gap-3 p-2 rounded-md group transition-colors relative ${item.isCompleted ? 'bg-green-100 dark:bg-green-900/30' : `hover:${bgBtn}`}`}>
                             <input 
                               type="checkbox" 
                               checked={item.isCompleted} 
                               onChange={(e) => toggleChecklistItem(item.id, e.target.checked, checklist.id)}
-                              className="w-4 h-4 mt-1 cursor-pointer accent-blue-600 appearance-none border-2 border-slate-400 dark:border-slate-500 rounded-sm checked:bg-green-500 checked:border-green-500 relative after:content-[''] after:absolute after:hidden checked:after:block after:left-[4px] after:top-[1px] after:w-[4px] after:h-[8px] after:border-solid after:border-white after:border-r-2 after:border-b-2 after:rotate-45"
+                              className="w-4 h-4 mt-1 cursor-pointer appearance-none border-2 border-slate-400 dark:border-slate-500 rounded-sm checked:bg-transparent checked:border-green-600 dark:checked:border-green-400 relative after:content-[''] after:absolute after:hidden checked:after:block after:left-[4px] after:top-[1px] after:w-[4px] after:h-[8px] after:border-solid after:border-green-600 dark:after:border-green-400 after:border-r-2 after:border-b-2 after:rotate-45"
                             />
                             <div className="flex-1 min-w-0 flex flex-wrap items-center gap-3">
-                              <span className={`text-sm ${item.isCompleted ? 'line-through text-slate-500 dark:text-[#a6c5e266]' : textHeading}`}>{item.title}</span>
+                              <span className={`text-sm ${item.isCompleted ? 'text-green-800 dark:text-green-400 font-medium' : textHeading}`}>{item.title}</span>
                               <div className="flex items-center gap-2 flex-wrap ml-auto pr-8">
                                  {/* TRU Summary Pills horizontally inline! */}
-                                 {item.truAvg !== null && (
-                                   <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                                     {item.T && <span className="bg-purple-100 text-purple-800 text-[9px] font-bold px-1 py-0.5 rounded shadow-sm">T:{item.T}</span>}
-                                     {item.R && <span className="bg-cyan-100 text-cyan-800 text-[9px] font-bold px-1 py-0.5 rounded shadow-sm">R:{item.R}</span>}
-                                     {item.U && <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1 py-0.5 rounded shadow-sm">U:{item.U}</span>}
-                                     <span className="text-[10px] bg-slate-200 text-slate-800 font-bold px-1.5 py-0.5 rounded">Avg: {item.truAvg.toFixed(1)}</span>
+                                 {(item.T !== null && item.R !== null && item.U !== null && item.T !== undefined && item.R !== undefined && item.U !== undefined) && (
+                                   <div className="flex items-center opacity-80 group-hover:opacity-100 transition-opacity">
+                                     <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                                       T{item.T}, R{item.R}, U{item.U}
+                                     </span>
                                    </div>
                                  )}
                                  {item.dueDate && (
@@ -369,11 +415,38 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
                <h4 className={`text-[11px] font-bold ${textMuted} uppercase mb-2 tracking-wider`}>Add to card</h4>
                <div className="space-y-2">
                  <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} label="Members" />
-                 <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>} label="Labels" />
+                 <div className="relative">
+                   <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>} label="Labels" onClick={() => setIsLabelsOpen(!isLabelsOpen)} />
+                   {isLabelsOpen && (
+                     <div className={`absolute top-full right-0 mt-1 w-64 bg-white dark:bg-[#22272b] shadow-xl border border-slate-300 dark:border-[#a6c5e229] rounded-lg p-3 z-50`}>
+                        <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase text-center">Labels</h4>
+                        <div className="grid grid-cols-3 gap-2">
+                           {AVAILABLE_COLORS.map(c => {
+                              const isActive = (localTask.labels ? JSON.parse(localTask.labels) : []).includes(c);
+                              return (
+                                <button 
+                                  key={c}
+                                  onClick={() => {
+                                     let current = localTask.labels ? JSON.parse(localTask.labels) : [];
+                                     if (current.includes(c)) current = current.filter((l: string) => l !== c);
+                                     else current.push(c);
+                                     updateTaskField('labels', JSON.stringify(current));
+                                  }}
+                                  className="h-8 rounded relative overflow-hidden transition-all hover:opacity-80"
+                                  style={{ backgroundColor: c }}
+                                >
+                                  {isActive && <div className="absolute inset-0 bg-black/20 flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg></div>}
+                                </button>
+                              )
+                           })}
+                        </div>
+                     </div>
+                   )}
+                 </div>
                  <div className="relative">
                    <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} label="Checklist" onClick={() => setIsAddingChecklist(!isAddingChecklist)} />
                    {isAddingChecklist && (
-                     <div className={`absolute top-full right-0 lg:left-0 mt-1 w-64 bg-white dark:bg-[#22272b] shadow-xl border border-slate-300 dark:border-[#a6c5e229] rounded-lg p-3 z-50`}>
+                     <div className={`absolute top-full right-0 mt-1 w-64 bg-white dark:bg-[#22272b] shadow-xl border border-slate-300 dark:border-[#a6c5e229] rounded-lg p-3 z-50`}>
                        <input 
                          autoFocus
                          className={`w-full border-2 border-blue-500 rounded px-2 py-1.5 focus:outline-none mb-2 text-sm ${textHeading} bg-transparent`} 
@@ -385,7 +458,24 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
                      </div>
                    )}
                  </div>
-                 <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} label="Dates" />
+                 <div className="relative">
+                   <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} label="Dates" onClick={() => setIsDatesOpen(!isDatesOpen)} />
+                   {isDatesOpen && (
+                     <div className={`absolute top-full right-0 mt-1 w-64 bg-white dark:bg-[#22272b] shadow-xl border border-slate-300 dark:border-[#a6c5e229] rounded-lg p-3 z-50`}>
+                       <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase text-center">Due Date</h4>
+                       <input 
+                          type="datetime-local" 
+                          className={`w-full border border-slate-300 dark:border-slate-600 rounded px-2 py-1.5 focus:outline-none mb-3 text-sm ${textHeading} bg-transparent`} 
+                          value={tempDate || (localTask.dueDate ? new Date(localTask.dueDate).toISOString().slice(0, 16) : '')}
+                          onChange={e => setTempDate(e.target.value)}
+                       />
+                       <div className="flex gap-2">
+                          <button onClick={() => { updateTaskField('dueDate', new Date(tempDate).toISOString()); setIsDatesOpen(false); }} className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">Save</button>
+                          <button onClick={() => { updateTaskField('dueDate', null); setTempDate(''); setIsDatesOpen(false); }} className="flex-1 py-1.5 bg-[#eaecf0] hover:bg-[#dfe1e6] dark:bg-[#a6c5e229] text-slate-700 dark:text-[#b6c2cf] rounded text-sm font-medium">Remove</button>
+                       </div>
+                     </div>
+                   )}
+                 </div>
                  <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>} label="Attachment" onClick={() => fileInputRef.current?.click()} />
                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                </div>
@@ -394,9 +484,7 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
              <div>
                <h4 className={`text-[11px] font-bold ${textMuted} uppercase mb-2 tracking-wider`}>Actions</h4>
                <div className="space-y-2">
-                 <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} label="Copy Card" />
-                 <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>} label="Move Card" />
-                 <SidebarAction icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>} label="Archive Card" />
+
                  <button onClick={() => {
                    fetch(`http://localhost:3001/api/tasks/${task.id}`, {method: 'DELETE'}).then(()=> { onClose(); window.location.reload(); });
                  }} className={`w-full flex items-center gap-3 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 active:scale-95 px-3 py-1.5 rounded-md transition-all text-sm font-bold text-red-600 dark:text-red-400`}>
@@ -498,10 +586,11 @@ function ExpandedItemEditor({ item, onSave, onCancel, onDelete }: { item: any, o
           <TruRow label="U (Urgency)" hint="How critical?" val={u} setVal={setU} />
         </div>
 
-        {calculateLocalAvg() && (
+        {(t !== null && r !== null && u !== null) && (
           <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center gap-3">
-             <span className="text-sm font-bold text-[#172b4d] dark:text-[#b6c2cf]">TRU Average:</span>
-             <span className="bg-slate-800 text-white rounded px-2 py-0.5 text-sm font-bold shadow-inner">● {calculateLocalAvg()} / 3.0</span>
+             <span className="bg-slate-800 text-white rounded px-3 py-1 text-sm font-bold shadow-inner">
+               T{t}, R{r}, U{u}
+             </span>
           </div>
         )}
       </div>

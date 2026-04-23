@@ -58,8 +58,8 @@ const recomputeTaskTRU = async (taskId: string) => {
     let allItems: any[] = [];
     task.checklists.forEach(cl => allItems.push(...cl.items));
 
-    const scored = allItems.filter(i => i.T && i.R && i.U);
-    if (scored.length === 0) {
+    const itemsWithTRU = allItems.filter(i => i.T && i.R && i.U);
+    if (itemsWithTRU.length === 0) {
       await prisma.task.update({
         where: { id: taskId },
         data: { avgT: null, avgR: null, avgU: null, truOverall: null }
@@ -67,10 +67,12 @@ const recomputeTaskTRU = async (taskId: string) => {
       return;
     }
 
-    const avgT = parseFloat((scored.reduce((a,b) => a + b.T!, 0) / scored.length).toFixed(1));
-    const avgR = parseFloat((scored.reduce((a,b) => a + b.R!, 0) / scored.length).toFixed(1));
-    const avgU = parseFloat((scored.reduce((a,b) => a + b.U!, 0) / scored.length).toFixed(1));
-    const truOverall = parseFloat(((avgT + avgR + avgU) / 3).toFixed(1));
+    const scored = itemsWithTRU.filter(i => !i.isCompleted);
+
+    const avgT = scored.reduce((a,b) => a + b.T!, 0);
+    const avgR = scored.reduce((a,b) => a + b.R!, 0);
+    const avgU = scored.reduce((a,b) => a + b.U!, 0);
+    const truOverall = avgT + avgR + avgU;
 
     await prisma.task.update({
       where: { id: taskId },
@@ -87,6 +89,7 @@ const recomputeTaskTRU = async (taskId: string) => {
 app.get('/api/projects', async (req, res) => {
   try {
     const projects = await prisma.project.findMany({
+      where: { isArchived: false },
       include: { 
         goals: { 
           where: { isArchived: false },
@@ -111,6 +114,98 @@ app.get('/api/projects', async (req, res) => {
     res.json(projectsWithProgress);
   } catch (e) {
     res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// Create a new project with defaults
+app.post('/api/projects', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    
+    const result = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.create({
+        data: { name, description }
+      });
+
+      const depts = await Promise.all([
+        tx.department.create({ data: { name: 'Engineering', projectId: project.id, color: '#2563EB' } }),
+        tx.department.create({ data: { name: 'Security', projectId: project.id, color: '#DC2626' } }),
+        tx.department.create({ data: { name: 'Marketing', projectId: project.id, color: '#D97706' } })
+      ]);
+
+      const goal = await tx.goal.create({
+        data: {
+          title: 'Status 1',
+          s1: 'Theoretical Concept',
+          s2: 'Functional MVP',
+          order: 0,
+          projectId: project.id
+        }
+      });
+
+      await Promise.all([
+        tx.boardList.create({ data: { title: 'Backlog', order: 0, goalId: goal.id } }),
+        tx.boardList.create({ data: { title: 'Doing', order: 1, goalId: goal.id } }),
+        tx.boardList.create({ data: { title: 'Done', order: 2, goalId: goal.id } })
+      ]);
+
+      return { project, goal };
+    });
+
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Update a project
+app.put('/api/projects/:id', async (req, res) => {
+  try {
+    const project = await prisma.project.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    res.json(project);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update project' });
+  }
+});
+
+// Soft delete a project
+app.delete('/api/projects/:id', async (req, res) => {
+  try {
+    const project = await prisma.project.update({
+      where: { id: req.params.id },
+      data: { isArchived: true }
+    });
+    res.json(project);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete project' });
+  }
+});
+
+// Restore a project
+app.put('/api/projects/:id/restore', async (req, res) => {
+  try {
+    const project = await prisma.project.update({
+      where: { id: req.params.id },
+      data: { isArchived: false }
+    });
+    res.json(project);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to restore project' });
+  }
+});
+
+// Purge a project permanently
+app.delete('/api/projects/:id/purge', async (req, res) => {
+  try {
+    await prisma.project.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ message: 'Project purged' });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to purge project' });
   }
 });
 
@@ -191,6 +286,25 @@ app.get('/api/lists', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to fetch lists' });
+  }
+});
+
+// Create a new list
+app.post('/api/lists', async (req, res) => {
+  try {
+    const { goalId, title } = req.body;
+    const count = await prisma.boardList.count({ where: { goalId: String(goalId) } });
+    const newList = await prisma.boardList.create({
+      data: {
+        title,
+        goalId: String(goalId),
+        order: count
+      }
+    });
+    res.json(newList);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to create list' });
   }
 });
 
@@ -393,10 +507,13 @@ app.put('/api/checklist-items/:id', async (req, res) => {
       include: { checklist: true }
     });
 
-    if (T !== undefined || R !== undefined || U !== undefined) {
+    const truChanged = T !== undefined || R !== undefined || U !== undefined;
+    const completionChanged = isCompleted !== undefined && isCompleted !== original.isCompleted;
+
+    if (truChanged || completionChanged) {
       await recomputeTaskTRU(item.checklist.taskId);
     }
-    if (isCompleted !== undefined && isCompleted !== original.isCompleted) {
+    if (completionChanged) {
       await logActivity(item.checklist.taskId, `Marked checklist item "${original.title}" as ${isCompleted ? 'complete' : 'incomplete'}`);
     }
 
@@ -492,17 +609,18 @@ app.delete('/api/goals/:id/purge', async (req, res) => {
   }
 });
 
-// Purge all archived goals
+// Purge all archived items
 app.delete('/api/trash/purge-all', async (req, res) => {
   try {
     await prisma.goal.deleteMany({ where: { isArchived: true } });
+    await prisma.project.deleteMany({ where: { isArchived: true } });
     res.json({ message: 'Trash bin cleared' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to clear trash bin' });
   }
 });
 
-// Get all archived goals (Trash Bin)
+// Get all archived items (Trash Bin)
 app.get('/api/trash', async (req, res) => {
   try {
     const archivedGoals = await prisma.goal.findMany({
@@ -510,7 +628,11 @@ app.get('/api/trash', async (req, res) => {
       include: { project: true },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(archivedGoals);
+    const archivedProjects = await prisma.project.findMany({
+      where: { isArchived: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ goals: archivedGoals, projects: archivedProjects });
   } catch (e) {
     res.status(500).json({ error: 'Failed to fetch trash bin' });
   }

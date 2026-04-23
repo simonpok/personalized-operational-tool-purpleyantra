@@ -11,6 +11,7 @@ model Project {
   id          String       @id @default(cuid())
   name        String
   description String?
+  isArchived  Boolean      @default(false)
   goals       Goal[]
   departments Department[]
   createdAt   DateTime     @default(now())
@@ -78,6 +79,8 @@ model Task {
   avgR        Float?
   avgU        Float?
   truOverall  Float?
+
+  labels      String?    // Comma-separated or JSON string of colors
 
   startDate    DateTime?
   dueDate      DateTime?
