@@ -98,6 +98,8 @@ model Task {
   progress     Float      @default(0)
   createdAt    DateTime   @default(now())
   
+  isFixed      Boolean    @default(false)
+  
   comments     Comment[]
 }
 

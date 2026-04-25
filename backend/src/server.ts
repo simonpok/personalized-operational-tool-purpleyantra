@@ -269,6 +269,55 @@ app.get('/api/stats/:goalId', async (req, res) => {
 
 // --- Board Routes ---
 
+// Get total TRU weight per board for a project
+app.get('/api/projects/:id/board-tru-stats', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const boards = await prisma.board.findMany({
+      where: { projectId: id },
+      include: {
+        lists: {
+          include: {
+            tasks: true
+          }
+        }
+      }
+    });
+
+    const stats = boards.map(board => {
+      let totalT = 0, totalR = 0, totalU = 0;
+      board.lists.forEach(list => {
+        list.tasks.forEach(task => {
+          if (task.truOverall !== null && task.truOverall !== undefined) {
+            totalT += task.avgT || 0;
+            totalR += task.avgR || 0;
+            totalU += task.avgU || 0;
+          } else {
+            totalT += task.technicality || 0;
+            totalR += task.regularity || 0;
+            totalU += task.urgency || 0;
+          }
+        });
+      });
+      return {
+        name: board.name,
+        value: totalT + totalR + totalU,
+        t: totalT,
+        r: totalR,
+        u: totalU
+      };
+    });
+
+    // Sort by value descending
+    stats.sort((a, b) => b.value - a.value);
+
+    res.json(stats);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to fetch board TRU stats' });
+  }
+});
+
 // Fetch boards for a project
 app.get('/api/projects/:id/boards', async (req, res) => {
   try {

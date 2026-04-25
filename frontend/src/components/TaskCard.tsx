@@ -21,6 +21,7 @@ interface Task {
   avgU?: number;
   truOverall?: number;
   labels?: string;
+  isFixed?: boolean;
 }
 
 interface TaskCardProps {
@@ -41,7 +42,7 @@ export function TaskCard({ task, index, onDelete, onProgressChange, onClick }: T
   };
 
   return (
-    <Draggable draggableId={task.id} index={index}>
+    <Draggable draggableId={task.id} index={index} isDragDisabled={task.isFixed}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -49,6 +50,8 @@ export function TaskCard({ task, index, onDelete, onProgressChange, onClick }: T
           {...provided.dragHandleProps}
           onClick={onClick}
           className={`bg-white rounded-lg shadow-[0_1px_1px_rgba(9,30,66,0.25)] hover:bg-slate-50 cursor-pointer p-3 mb-2 relative group flex flex-col gap-2 ${
+            task.isFixed ? 'bg-purple-100 dark:bg-purple-900/40 ring-1 ring-purple-400/50' : ''
+          } ${
             snapshot.isDragging ? 'rotate-2 scale-105 shadow-xl ring-2 ring-blue-500/50 z-50' : ''
           }`}
         >

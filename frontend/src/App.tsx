@@ -194,10 +194,13 @@ function ProjectSidebar() {
   );
 }
 
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+
 function Dashboard() {
   const { goalId } = useParams();
   const { goals } = useContext(MissionContext);
   const [stats, setStats] = useState<{
+    projectId: string,
     projectName: string,
     goalTitle: string,
     s1: string,
@@ -205,6 +208,7 @@ function Dashboard() {
     progress: number,
     departments: { id: string, name: string, color: string, progress: number }[]
   } | null>(null);
+  const [boardTruStats, setBoardTruStats] = useState<{ name: string, value: number, t: number, r: number, u: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -212,13 +216,51 @@ function Dashboard() {
     fetch(`http://localhost:3001/api/stats/${goalId}`)
       .then(res => res.json())
       .then(data => {
-        if (!data.error) setStats(data);
+        if (!data.error) {
+          setStats(data);
+          // Fetch board TRU stats using project ID
+          return fetch(`http://localhost:3001/api/projects/${data.projectId}/board-tru-stats`);
+        }
+        throw new Error('Failed to fetch stats');
       })
+      .then(res => res.json())
+      .then(data => setBoardTruStats(data))
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, [goalId]);
 
   if (isLoading || !stats) return <DashboardSkeleton />;
+
+  const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+          <p className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight mb-2 border-b border-slate-50 dark:border-slate-800 pb-2">{data.name}</p>
+          <div className="flex gap-3">
+             <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-blue-500 uppercase">Tech</span>
+                <span className="text-sm font-black text-slate-700 dark:text-slate-300">T{data.t}</span>
+             </div>
+             <div className="flex flex-col border-x border-slate-100 dark:border-slate-800 px-3">
+                <span className="text-[10px] font-bold text-purple-500 uppercase">Reg</span>
+                <span className="text-sm font-black text-slate-700 dark:text-slate-300">R{data.r}</span>
+             </div>
+             <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-rose-500 uppercase">Urg</span>
+                <span className="text-sm font-black text-slate-700 dark:text-slate-300">U{data.u}</span>
+             </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-slate-50 dark:border-slate-800">
+             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Weight: {data.value}</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="p-8 max-w-6xl mx-auto font-sans animate-in fade-in duration-500">
@@ -226,7 +268,6 @@ function Dashboard() {
       <div className="mb-2 px-1">
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500/60 transition-all duration-700">
           {(() => {
-            // Use fresh stats to overlay stale context if task progress was just updated
             const currentGoalsState = goals.map(g => 
                g.id === goalId && stats ? { ...g, progress: stats.progress } : g
             );
@@ -249,7 +290,6 @@ function Dashboard() {
         </span>
       </div>
 
-
       {/* S1 -> S2 Journey */}
       <div className="bg-card shadow-lg border border-border rounded-2xl p-8 mb-8 transform transition-all hover:shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
@@ -259,26 +299,110 @@ function Dashboard() {
         <div className="flex justify-between text-xs mb-4 text-mutedText font-bold uppercase tracking-widest">
           <div className="flex flex-col">
             <span className="text-slate-400 mb-1">Current State (S1)</span>
-            <span className="text-slate-800 text-base normal-case font-medium">{stats.s1}</span>
+            <span className="text-slate-800 dark:text-slate-200 text-base normal-case font-medium">{stats.s1}</span>
           </div>
           <div className="flex flex-col text-right">
             <span className="text-accentBlue mb-1">Goal State (S2)</span>
-            <span className="text-slate-800 text-base normal-case font-medium">{stats.s2}</span>
+            <span className="text-slate-800 dark:text-slate-200 text-base normal-case font-medium">{stats.s2}</span>
           </div>
         </div>
         
-        <div className="w-full bg-slate-100/50 rounded-2xl h-12 overflow-hidden relative border border-slate-100 shadow-inner">
+        <div className="w-full bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl h-12 overflow-hidden relative border border-slate-100 dark:border-slate-700 shadow-inner">
           <div 
             className="bg-gradient-to-r from-accentBlue via-accentBlue to-accentGreen h-full rounded-2xl transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(37,99,235,0.3)]" 
             style={{width: `${stats.progress}%`}}
           ></div>
-          <div className="absolute inset-0 flex items-center justify-center font-mono font-black text-slate-800 text-xl tracking-tighter mix-blend-overlay">
+          <div className="absolute inset-0 flex items-center justify-center font-mono font-black text-slate-800 dark:text-slate-200 text-xl tracking-tighter mix-blend-overlay">
             {stats.progress}%
           </div>
         </div>
       </div>
-      
 
+      {/* Department Board Weight Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="bg-card shadow-lg border border-border rounded-2xl p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col">
+          <div className="flex flex-col mb-6">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">Mission Load Distribution</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Relative weight by Department Board</p>
+          </div>
+          
+          <div className="h-[300px] w-full flex items-center justify-center">
+            {boardTruStats.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={boardTruStats}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                    animationBegin={0}
+                    animationDuration={1500}
+                  >
+                    {boardTruStats.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36} 
+                    iconType="circle"
+                    formatter={(value) => <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-slate-300 gap-2">
+                <div className="text-4xl">📊</div>
+                <p className="text-xs font-bold uppercase tracking-widest">No Operational Data Available</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Visual Ranking List */}
+        <div className="bg-card shadow-lg border border-border rounded-2xl p-8 transform transition-all hover:shadow-xl relative overflow-hidden">
+           <div className="flex flex-col mb-6">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">Department Hierarchy</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ranked by Operational Complexity</p>
+          </div>
+
+          <div className="space-y-4">
+             {boardTruStats.length > 0 ? boardTruStats.map((board, index) => (
+               <div key={board.name} className="flex items-center gap-4 group">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs shadow-sm`} style={{ backgroundColor: COLORS[index % COLORS.length] }}>
+                    {index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-tight">{board.name}</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest transition-opacity group-hover:text-blue-500">
+                        T{board.t}, R{board.r}, U{board.u}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                       <div 
+                        className="h-full rounded-full transition-all duration-1000 delay-300" 
+                        style={{ 
+                          width: `${(board.value / Math.max(...boardTruStats.map(s => s.value))) * 100}%`,
+                          backgroundColor: COLORS[index % COLORS.length]
+                        }}
+                       />
+                    </div>
+                  </div>
+               </div>
+             )) : (
+               <div className="py-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                  <p className="text-xs font-bold text-slate-300 uppercase tracking-widest">Awaiting Mission Data...</p>
+               </div>
+             )}
+          </div>
+        </div>
+      </div>
+      
     </div>
   );
 }
