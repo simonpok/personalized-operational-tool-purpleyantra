@@ -318,9 +318,9 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Department Board Weight Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <div className="bg-card shadow-lg border border-border rounded-2xl p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col">
+      {/* Mission Load Distribution */}
+      <div className="flex justify-center mb-8">
+        <div className="bg-card shadow-lg border border-border rounded-2xl p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col w-full max-w-2xl">
           <div className="flex flex-col mb-6">
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">Mission Load Distribution</h3>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Relative weight by Department Board</p>
@@ -360,45 +360,6 @@ function Dashboard() {
                 <p className="text-xs font-bold uppercase tracking-widest">No Operational Data Available</p>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Visual Ranking List */}
-        <div className="bg-card shadow-lg border border-border rounded-2xl p-8 transform transition-all hover:shadow-xl relative overflow-hidden">
-           <div className="flex flex-col mb-6">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">Department Hierarchy</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ranked by Operational Complexity</p>
-          </div>
-
-          <div className="space-y-4">
-             {boardTruStats.length > 0 ? boardTruStats.map((board, index) => (
-               <div key={board.name} className="flex items-center gap-4 group">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs shadow-sm`} style={{ backgroundColor: COLORS[index % COLORS.length] }}>
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-tight">{board.name}</span>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest transition-opacity group-hover:text-blue-500">
-                        T{board.t}, R{board.r}, U{board.u}
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                       <div 
-                        className="h-full rounded-full transition-all duration-1000 delay-300" 
-                        style={{ 
-                          width: `${(board.value / Math.max(...boardTruStats.map(s => s.value))) * 100}%`,
-                          backgroundColor: COLORS[index % COLORS.length]
-                        }}
-                       />
-                    </div>
-                  </div>
-               </div>
-             )) : (
-               <div className="py-10 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-                  <p className="text-xs font-bold text-slate-300 uppercase tracking-widest">Awaiting Mission Data...</p>
-               </div>
-             )}
           </div>
         </div>
       </div>

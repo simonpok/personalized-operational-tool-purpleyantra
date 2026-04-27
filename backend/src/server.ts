@@ -850,10 +850,37 @@ io.on('connection', (socket) => {
 
   socket.on('task:drag', async (data: { taskId: string, newListId: string, newOrder: number }) => {
     try {
+      const newList = await prisma.boardList.findUnique({ where: { id: data.newListId } });
+      const isDoneList = newList?.title.toLowerCase() === 'done';
+
+      const taskUpdateData: any = { listId: data.newListId, order: data.newOrder };
+      
+      if (isDoneList) {
+        taskUpdateData.progress = 100;
+        
+        // Mark all checklist items as completed
+        const checklists = await prisma.checklist.findMany({
+          where: { taskId: data.taskId }
+        });
+        
+        for (const cl of checklists) {
+          await prisma.checklistItem.updateMany({
+            where: { checklistId: cl.id },
+            data: { isCompleted: true }
+          });
+        }
+      }
+
       const task = await prisma.task.update({
         where: { id: data.taskId },
-        data: { listId: data.newListId, order: data.newOrder }
+        data: taskUpdateData
       });
+
+      if (isDoneList) {
+        await recomputeTaskTRU(task.id);
+        await logActivity(task.id, 'Task moved to Done - all items auto-completed');
+      }
+
       io.emit('board:updated', { taskId: task.id });
     } catch (e) {
       console.error(e);
