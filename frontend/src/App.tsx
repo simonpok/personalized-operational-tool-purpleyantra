@@ -7,6 +7,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { ProjectsList } from './components/ProjectsList';
 import React from 'react';
 import { io } from 'socket.io-client';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface Goal {
   id: string;
@@ -40,7 +41,7 @@ function DashboardSkeleton() {
   );
 }
 
-function ProjectSidebar() {
+function ProjectSidebar({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const { goalId } = useParams();
   const [stats, setStats] = useState<any>(null);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -78,31 +79,51 @@ function ProjectSidebar() {
   }, [goalId]);
 
   return (
-    <div className={`${isExpanded ? 'w-64' : 'w-20'} bg-white border-r border-slate-200 transition-all duration-300 flex flex-col flex-shrink-0 relative group z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]`}>
-      <button 
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="absolute -right-3 top-6 bg-white border border-slate-200 rounded-full w-6 h-6 flex items-center justify-center shadow-sm text-slate-400 hover:text-slate-600 z-50 opacity-0 group-hover:opacity-100 transition-all"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isExpanded ? '' : 'rotate-180'}>
-          <path d="m15 18-6-6 6-6"/>
-        </svg>
-      </button>
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[90] lg:hidden animate-in fade-in duration-300"
+          onClick={onClose}
+        />
+      )}
 
-      <div className="p-4 flex-1 flex flex-col overflow-hidden">
-        {/* Header Area */}
-        <div className={`mb-6 mt-2 flex items-center gap-3 ${isExpanded ? '' : 'justify-center'}`}>
-          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-          </div>
-          {isExpanded ? (
-            <div className="min-w-0 flex-1">
-              <h1 className="font-bold font-mono tracking-tight text-slate-800 uppercase truncate text-sm">
-                {stats?.projectName || 'Loading...'}
-              </h1>
-              <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest truncate">{stats?.goalTitle || 'Loading...'}</p>
+      <div className={`
+        ${isExpanded ? 'w-64' : 'w-20'} 
+        bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 
+        transition-all duration-300 flex flex-col flex-shrink-0 relative group z-[100] 
+        shadow-[4px_0_24px_rgba(0,0,0,0.02)]
+        fixed h-full lg:sticky lg:top-0
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <button 
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="absolute -right-3 top-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full w-6 h-6 flex items-center justify-center shadow-sm text-slate-400 hover:text-slate-600 z-50 opacity-0 group-hover:opacity-100 transition-all hidden lg:flex"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isExpanded ? '' : 'rotate-180'}>
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+        </button>
+
+        <div className="p-4 flex-1 flex flex-col overflow-hidden">
+          {/* Header Area */}
+          <div className={`mb-6 mt-2 flex items-center gap-3 ${isExpanded ? '' : 'justify-center'}`}>
+            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-inner">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
             </div>
-          ) : null}
-        </div>
+            {isExpanded ? (
+              <div className="min-w-0 flex-1">
+                <h1 className="font-bold font-mono tracking-tight text-slate-800 dark:text-slate-100 uppercase truncate text-sm">
+                  {stats?.projectName || 'Loading...'}
+                </h1>
+                <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest truncate">{stats?.goalTitle || 'Loading...'}</p>
+              </div>
+            ) : null}
+            {/* Mobile Close Button */}
+            <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-slate-600">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
 
         {/* Links Area */}
         <nav className="flex flex-col gap-2">
@@ -130,7 +151,8 @@ function ProjectSidebar() {
             <Link 
               key={b.id}
               to={`/goal/${goalId}/board/${b.id}`} 
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm text-slate-600 hover:bg-blue-50 hover:text-blue-600 border border-transparent hover:border-blue-100 transition-all group/link overflow-hidden ml-1"
+              onClick={onClose}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm text-slate-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 border border-transparent hover:border-blue-100 dark:hover:border-blue-800 transition-all group/link overflow-hidden ml-1"
               title={b.name}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover/link:text-blue-500 transition-colors flex-shrink-0"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M7 7h.01"/><path d="M17 7h.01"/><path d="M12 7h.01"/><path d="M7 12h.01"/><path d="M17 12h.01"/><path d="M12 12h.01"/><path d="M7 17h.01"/><path d="M17 17h.01"/><path d="M12 17h.01"/></svg>
@@ -191,24 +213,16 @@ function ProjectSidebar() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 function Dashboard() {
   const { goalId } = useParams();
   const { goals } = useContext(MissionContext);
-  const [stats, setStats] = useState<{
-    projectId: string,
-    projectName: string,
-    goalTitle: string,
-    s1: string,
-    s2: string,
-    progress: number,
-    departments: { id: string, name: string, color: string, progress: number }[]
-  } | null>(null);
-  const [boardTruStats, setBoardTruStats] = useState<{ name: string, value: number, t: number, r: number, u: number }[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [boardTruStats, setBoardTruStats] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -218,7 +232,6 @@ function Dashboard() {
       .then(data => {
         if (!data.error) {
           setStats(data);
-          // Fetch board TRU stats using project ID
           return fetch(`http://localhost:3001/api/projects/${data.projectId}/board-tru-stats`);
         }
         throw new Error('Failed to fetch stats');
@@ -229,32 +242,28 @@ function Dashboard() {
       .finally(() => setIsLoading(false));
   }, [goalId]);
 
-  if (isLoading || !stats) return <DashboardSkeleton />;
+  if (isLoading || !stats) {
+    return (
+      <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-4 animate-pulse">
+           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+           <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Synchronizing Mission Data...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
+  const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6'];
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
-          <p className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight mb-2 border-b border-slate-50 dark:border-slate-800 pb-2">{data.name}</p>
-          <div className="flex gap-3">
-             <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-blue-500 uppercase">Tech</span>
-                <span className="text-sm font-black text-slate-700 dark:text-slate-300">T{data.t}</span>
-             </div>
-             <div className="flex flex-col border-x border-slate-100 dark:border-slate-800 px-3">
-                <span className="text-[10px] font-bold text-purple-500 uppercase">Reg</span>
-                <span className="text-sm font-black text-slate-700 dark:text-slate-300">R{data.r}</span>
-             </div>
-             <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-rose-500 uppercase">Urg</span>
-                <span className="text-sm font-black text-slate-700 dark:text-slate-300">U{data.u}</span>
-             </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-slate-50 dark:border-slate-800">
-             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Weight: {data.value}</span>
+        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 backdrop-blur-md z-[500]">
+          <p className="text-xs font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{data.name}</p>
+          <div className="space-y-1">
+             <p className="text-[10px] flex justify-between gap-4"><span>Weight:</span> <span className="font-bold">{data.value}</span></p>
+             <p className="text-[10px] flex justify-between gap-4"><span>T/R/U:</span> <span className="font-bold">{data.t}/{data.r}/{data.u}</span></p>
           </div>
         </div>
       );
@@ -263,7 +272,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto font-sans animate-in fade-in duration-500">
+    <div className="p-4 md:p-12 space-y-6 md:space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
       {/* Dynamic Status Label (Mission Wide) */}
       <div className="mb-2 px-1">
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500/60 transition-all duration-700">
@@ -271,9 +280,7 @@ function Dashboard() {
             const currentGoalsState = goals.map(g => 
                g.id === goalId && stats ? { ...g, progress: stats.progress } : g
             );
-
-            const firstIncompleteIndex = currentGoalsState.findIndex(g => g.progress < 100);
-
+            const firstIncompleteIndex = currentGoalsState.findIndex(g => (g.progress ?? 0) < 100);
             if (firstIncompleteIndex === -1) {
               const lastGoal = currentGoalsState[currentGoalsState.length - 1];
               if (!lastGoal) return "Mission Ready";
@@ -290,43 +297,73 @@ function Dashboard() {
         </span>
       </div>
 
-      {/* S1 -> S2 Journey */}
-      <div className="bg-card shadow-lg border border-border rounded-2xl p-8 mb-8 transform transition-all hover:shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-           <svg width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl md:text-5xl font-black text-slate-800 dark:text-slate-100 tracking-tighter leading-none mb-2 uppercase">
+            MISSION <span className="text-blue-600">COMMAND</span>
+          </h2>
+          <p className="text-slate-400 dark:text-slate-500 font-mono text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold">Strategic Operational Intelligence</p>
         </div>
-        
-        <div className="flex justify-between text-xs mb-4 text-mutedText font-bold uppercase tracking-widest">
+        <div className="text-right">
+          <div className="text-slate-400 dark:text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-1">Status Coverage</div>
+          <div className="flex items-center gap-3 justify-end">
+             <span className="text-2xl md:text-4xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{Math.round(stats.progress)}%</span>
+             <div className="w-16 md:w-24 h-2 md:h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+                <div className="h-full bg-blue-600 rounded-full" style={{width: `${stats.progress}%`}}></div>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 relative z-10">
+          <div>
+            <div className="text-blue-600 dark:text-blue-400 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
+              Mission Trajectory
+            </div>
+            <h3 className="text-xl md:text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight uppercase">Progress Overview</h3>
+          </div>
+          <div className="flex gap-4">
+            <div className="bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-2xl border border-slate-100 dark:border-slate-700">
+               <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Tasks</div>
+               <div className="text-lg font-black text-slate-800 dark:text-slate-100">{stats.completedTasks}/{stats.totalTasks}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-between text-[10px] md:text-xs mb-4 text-slate-500 font-bold uppercase tracking-widest gap-4">
           <div className="flex flex-col">
-            <span className="text-slate-400 mb-1">Current State (S1)</span>
-            <span className="text-slate-800 dark:text-slate-200 text-base normal-case font-medium">{stats.s1}</span>
+            <span className="text-slate-400 mb-1 font-bold">Current State (S1)</span>
+            <span className="text-slate-800 dark:text-slate-200 text-sm md:text-base normal-case font-medium">{stats.s1}</span>
           </div>
-          <div className="flex flex-col text-right">
-            <span className="text-accentBlue mb-1">Goal State (S2)</span>
-            <span className="text-slate-800 dark:text-slate-200 text-base normal-case font-medium">{stats.s2}</span>
+          <div className="flex flex-col sm:text-right">
+            <span className="text-blue-600 mb-1 font-bold">Goal State (S2)</span>
+            <span className="text-slate-800 dark:text-slate-200 text-sm md:text-base normal-case font-medium">{stats.s2}</span>
           </div>
         </div>
-        
-        <div className="w-full bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl h-12 overflow-hidden relative border border-slate-100 dark:border-slate-700 shadow-inner">
+
+        <div className="w-full bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl h-10 md:h-12 overflow-hidden relative border border-slate-100 dark:border-slate-700 shadow-inner">
           <div 
-            className="bg-gradient-to-r from-accentBlue via-accentBlue to-accentGreen h-full rounded-2xl transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(37,99,235,0.3)]" 
+            className="bg-gradient-to-r from-blue-600 via-blue-500 to-emerald-500 h-full rounded-2xl transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(37,99,235,0.3)]" 
             style={{width: `${stats.progress}%`}}
           ></div>
-          <div className="absolute inset-0 flex items-center justify-center font-mono font-black text-slate-800 dark:text-slate-200 text-xl tracking-tighter mix-blend-overlay">
-            {stats.progress}%
+          <div className="absolute inset-0 flex items-center justify-center font-mono font-black text-slate-700 dark:text-slate-300 text-lg md:text-xl tracking-tighter drop-shadow-sm">
+            {Math.round(stats.progress)}%
           </div>
         </div>
       </div>
 
       {/* Mission Load Distribution */}
       <div className="flex justify-center mb-8">
-        <div className="bg-card shadow-lg border border-border rounded-2xl p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col w-full max-w-2xl">
+        <div className="bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-800 rounded-3xl p-4 md:p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col w-full max-w-2xl">
           <div className="flex flex-col mb-6">
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">Mission Load Distribution</h3>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Relative weight by Department Board</p>
           </div>
           
-          <div className="h-[300px] w-full flex items-center justify-center">
+          <div className="h-[250px] md:h-[300px] w-full flex items-center justify-center">
             {boardTruStats.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -334,8 +371,8 @@ function Dashboard() {
                     data={boardTruStats}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
+                    innerRadius={window.innerWidth < 640 ? 40 : 60}
+                    outerRadius={window.innerWidth < 640 ? 70 : 100}
                     paddingAngle={5}
                     dataKey="value"
                     animationBegin={0}
@@ -350,7 +387,7 @@ function Dashboard() {
                     verticalAlign="bottom" 
                     height={36} 
                     iconType="circle"
-                    formatter={(value) => <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{value}</span>}
+                    formatter={(value) => <span className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -606,6 +643,7 @@ const GoalLayout = ({ children }: { children: React.ReactNode }) => {
   const { goalId } = useParams();
   const navigate = useNavigate();
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const refreshGoals = () => {
     fetch('http://localhost:3001/api/projects')
@@ -680,7 +718,7 @@ const GoalLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <MissionContext.Provider value={{ goals, refreshGoals }}>
-      <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+      <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden">
         <div className="flex-shrink-0 z-20">
           <GoalSelector 
             goals={goals} 
@@ -689,9 +727,18 @@ const GoalLayout = ({ children }: { children: React.ReactNode }) => {
             onAddGoal={handleAddGoal}
           />
         </div>
+        
+        {/* Mobile Menu Toggle Floating Button */}
+        <button 
+          onClick={() => setIsMobileSidebarOpen(true)}
+          className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center z-[80] active:scale-90 transition-transform"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+
         <div className="flex flex-1 overflow-hidden relative">
-          <ProjectSidebar />
-          <div className="flex-1 overflow-y-auto">
+          <ProjectSidebar isOpen={isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)} />
+          <div className="flex-1 overflow-y-auto w-full">
             {children}
           </div>
         </div>

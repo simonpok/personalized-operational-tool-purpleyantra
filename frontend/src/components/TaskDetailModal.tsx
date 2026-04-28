@@ -339,6 +339,11 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
                                      </span>
                                    </div>
                                  )}
+                                 {item.estimatedTime && (
+                                   <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                                      ⏱️ {item.estimatedTime}
+                                   </span>
+                                 )}
                                  {item.dueDate && (
                                    <span className="text-[10px] bg-red-100 text-red-800 font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
                                       📅 {new Date(item.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -551,6 +556,10 @@ function ChecklistItemAdder({ checklistId, onAdd }: { checklistId: string, onAdd
 function ExpandedItemEditor({ item, onSave, onCancel, onDelete }: { item: any, onSave: (p: any) => void, onCancel: () => void, onDelete: () => void }) {
   const [title, setTitle] = useState(item.title);
   const [date, setDate] = useState(item.dueDate ? item.dueDate.split('T')[0] : '');
+  const initialValue = item.estimatedTime ? item.estimatedTime.split(' ')[0] : '';
+  const initialUnit = item.estimatedTime && item.estimatedTime.includes('Day') ? 'Day' : 'Hour';
+  const [timeValue, setTimeValue] = useState(initialValue);
+  const [timeUnit, setTimeUnit] = useState(initialUnit);
   const [t, setT] = useState<number | null>(item.T || null);
   const [r, setR] = useState<number | null>(item.R || null);
   const [u, setU] = useState<number | null>(item.U || null);
@@ -580,6 +589,36 @@ function ExpandedItemEditor({ item, onSave, onCancel, onDelete }: { item: any, o
            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Due Date</label>
            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-[#eaecf0] dark:bg-[#a6c5e229] text-slate-700 dark:text-[#b6c2cf] px-3 py-1 text-xs font-semibold rounded border-none outline-none" />
         </div>
+        <div>
+           <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Time</label>
+           <div className="flex gap-2 items-center">
+             <input 
+               type="number" 
+               min="1" 
+               value={timeValue}
+               onChange={e => setTimeValue(e.target.value)}
+               className="w-16 bg-[#eaecf0] dark:bg-[#a6c5e229] text-slate-700 dark:text-[#b6c2cf] px-2 py-1.5 text-xs font-semibold rounded border-none outline-none"
+               placeholder="e.g. 5"
+             />
+             <select 
+               value={timeUnit} 
+               onChange={e => setTimeUnit(e.target.value)} 
+               className="bg-[#eaecf0] dark:bg-[#a6c5e229] text-slate-700 dark:text-[#b6c2cf] px-3 py-1.5 text-xs font-semibold rounded border-none outline-none cursor-pointer"
+             >
+               <option value="Hour">Hour(s)</option>
+               <option value="Day">Day(s)</option>
+             </select>
+             {timeValue && (
+               <button 
+                 onClick={() => { setTimeValue(''); setTimeUnit('Hour'); }} 
+                 className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50 dark:hover:bg-red-500/10"
+                 title="Clear Time"
+               >
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+               </button>
+             )}
+           </div>
+        </div>
       </div>
 
       <div className="bg-slate-50 dark:bg-black/20 rounded p-3 mb-6 border border-slate-100 dark:border-white/5">
@@ -602,7 +641,10 @@ function ExpandedItemEditor({ item, onSave, onCancel, onDelete }: { item: any, o
 
       <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
          <div className="flex gap-2">
-            <button onClick={() => onSave({ title, dueDate: date ? new Date(date).toISOString() : null, T: t, R: r, U: u })} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded font-medium text-sm transition-colors shadow-sm">Save</button>
+            <button onClick={() => {
+              const finalTime = timeValue ? `${timeValue} ${timeUnit}${timeValue === '1' ? '' : 's'}` : null;
+              onSave({ title, dueDate: date ? new Date(date).toISOString() : null, estimatedTime: finalTime, T: t, R: r, U: u })
+            }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded font-medium text-sm transition-colors shadow-sm">Save</button>
             <button onClick={onCancel} className="text-slate-600 dark:text-[#b6c2cf] hover:bg-[#eaecf0] dark:hover:bg-[#a6c5e23d] px-4 py-1.5 rounded font-medium text-sm transition-colors">Cancel</button>
          </div>
          <button onClick={onDelete} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 px-3 py-1.5 rounded font-medium text-sm transition-colors">Delete Item</button>

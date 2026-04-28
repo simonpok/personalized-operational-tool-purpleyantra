@@ -58,26 +58,34 @@ const recomputeTaskTRU = async (taskId: string) => {
     let allItems: any[] = [];
     task.checklists.forEach(cl => allItems.push(...cl.items));
 
+    // Calculate progress based on all checklist items
+    const totalItems = allItems.length;
+    const completedItems = allItems.filter(i => i.isCompleted).length;
+    const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : task.progress;
+
     const itemsWithTRU = allItems.filter(i => i.T && i.R && i.U);
+    const updateData: any = { progress };
+
     if (itemsWithTRU.length === 0) {
-      await prisma.task.update({
-        where: { id: taskId },
-        data: { avgT: null, avgR: null, avgU: null, truOverall: null }
-      });
-      return;
+      updateData.avgT = null;
+      updateData.avgR = null;
+      updateData.avgU = null;
+      updateData.truOverall = null;
+    } else {
+      const scored = itemsWithTRU.filter(i => !i.isCompleted);
+      updateData.avgT = scored.reduce((a,b) => a + b.T!, 0);
+      updateData.avgR = scored.reduce((a,b) => a + b.R!, 0);
+      updateData.avgU = scored.reduce((a,b) => a + b.U!, 0);
+      updateData.truOverall = updateData.avgT + updateData.avgR + updateData.avgU;
     }
 
-    const scored = itemsWithTRU.filter(i => !i.isCompleted);
-
-    const avgT = scored.reduce((a,b) => a + b.T!, 0);
-    const avgR = scored.reduce((a,b) => a + b.R!, 0);
-    const avgU = scored.reduce((a,b) => a + b.U!, 0);
-    const truOverall = avgT + avgR + avgU;
-
-    await prisma.task.update({
+    const updatedTask = await prisma.task.update({
       where: { id: taskId },
-      data: { avgT, avgR, avgU, truOverall }
+      data: updateData
     });
+
+    // Broadcast progress update to all clients
+    io.emit('progress:updated', { taskId: updatedTask.id, progress: updatedTask.progress });
   } catch (e) {
     console.error('Failed to recompute task TRU', e);
   }
@@ -582,7 +590,7 @@ app.delete('/api/checklists/:id', async (req, res) => {
 
 app.post('/api/checklists/:id/items', async (req, res) => {
   try {
-    const { title, dueDate, T, R, U } = req.body;
+    const { title, dueDate, T, R, U, estimatedTime } = req.body;
     let truAvg = null;
     if (T && R && U) {
       truAvg = parseFloat(((T + R + U) / 3).toFixed(1));
@@ -592,6 +600,7 @@ app.post('/api/checklists/:id/items', async (req, res) => {
       data: {
         title,
         dueDate,
+        estimatedTime,
         T, R, U, truAvg,
         checklistId: req.params.id
       },
@@ -610,7 +619,7 @@ app.post('/api/checklists/:id/items', async (req, res) => {
 
 app.put('/api/checklist-items/:id', async (req, res) => {
   try {
-    const { T, R, U, isCompleted, title, dueDate } = req.body;
+    const { T, R, U, isCompleted, title, dueDate, estimatedTime } = req.body;
     
     // Grab original to check changes
     const original = await prisma.checklistItem.findUnique({ where: { id: req.params.id }, include: { checklist: true } });
@@ -629,7 +638,7 @@ app.put('/api/checklist-items/:id', async (req, res) => {
 
     const item = await prisma.checklistItem.update({
       where: { id: req.params.id },
-      data: { T, R, U, truAvg, isCompleted, title, dueDate },
+      data: { T, R, U, truAvg, isCompleted, title, dueDate, estimatedTime },
       include: { checklist: true }
     });
 
@@ -851,7 +860,7 @@ io.on('connection', (socket) => {
   socket.on('task:drag', async (data: { taskId: string, newListId: string, newOrder: number }) => {
     try {
       const newList = await prisma.boardList.findUnique({ where: { id: data.newListId } });
-      const isDoneList = newList?.title.toLowerCase() === 'done';
+      const isDoneList = newList?.title === 'Done';
 
       const taskUpdateData: any = { listId: data.newListId, order: data.newOrder };
       

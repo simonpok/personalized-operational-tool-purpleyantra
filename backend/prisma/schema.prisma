@@ -144,6 +144,7 @@ model ChecklistItem {
   title       String
   isCompleted Boolean   @default(false)
   dueDate     DateTime?
+  estimatedTime String?
   
   T           Int?      // 1, 2, or 3
   R           Int?      // 1, 2, or 3
