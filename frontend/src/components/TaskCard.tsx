@@ -14,7 +14,7 @@ interface Task {
   order: number;
   dueDate?: string;
 
-  checklists?: { id: string, title: string, items: { isCompleted: boolean }[] }[];
+  checklists?: { id: string, title: string, items: { isCompleted: boolean; estimatedTime?: string }[] }[];
   attachments?: any[];
   avgT?: number;
   avgR?: number;
@@ -76,18 +76,57 @@ export function TaskCard({ task, index, onDelete, onProgressChange, onClick }: T
             </button>
           </div>
 
-          {/* Computed TRU Score Badges */}
-          {task.truOverall !== null && task.truOverall !== undefined ? (
-            <div className="flex gap-2 mb-3 pl-2">
+          {/* Computed TRU Score Badges & Time Remaining */}
+          <div className="flex flex-wrap gap-2 mb-3 pl-2">
+            {task.truOverall !== null && task.truOverall !== undefined ? (
               <span className="bg-slate-800 text-white text-[11px] font-bold px-2 py-1 rounded shadow-sm">
                 T{task.avgT != null ? task.avgT.toFixed(1).replace(/\.0$/, '') : '-'}, R{task.avgR != null ? task.avgR.toFixed(1).replace(/\.0$/, '') : '-'}, U{task.avgU != null ? task.avgU.toFixed(1).replace(/\.0$/, '') : '-'}
               </span>
-            </div>
-          ) : (
-            <div className="flex gap-2 mb-3 pl-2 opacity-50 grayscale">
-              <span className="text-[10px] font-bold text-slate-400">No TRU Score Items</span>
-            </div>
-          )}
+            ) : (
+              <span className="text-[10px] font-bold text-slate-400 opacity-50 grayscale flex items-center">No TRU Score Items</span>
+            )}
+
+            {(() => {
+              let totalDays = 0;
+              let totalHours = 0;
+
+              task.checklists?.forEach(checklist => {
+                checklist.items?.forEach(item => {
+                  if (!item.isCompleted && item.estimatedTime) {
+                    const [val, unit] = item.estimatedTime.split(' ');
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num)) {
+                      if (unit.startsWith('Day')) totalDays += num;
+                      if (unit.startsWith('Hour')) totalHours += num;
+                    }
+                  }
+                });
+              });
+
+              if (totalHours >= 24) {
+                totalDays += Math.floor(totalHours / 24);
+                totalHours = totalHours % 24;
+              }
+
+              let timeRemainingStr = '';
+              if (totalDays > 0 && totalHours > 0) {
+                timeRemainingStr = `${totalDays}d and ${totalHours}hr work remaining`;
+              } else if (totalDays > 0) {
+                timeRemainingStr = `${totalDays}d work remaining`;
+              } else if (totalHours > 0) {
+                timeRemainingStr = `${totalHours}hr work remaining`;
+              }
+
+              if (timeRemainingStr) {
+                return (
+                  <span className="bg-blue-100 text-blue-800 text-[11px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
+                    ⏱️ {timeRemainingStr}
+                  </span>
+                );
+              }
+              return null;
+            })()}
+          </div>
 
           {/* Badges Row */}
           <div className="flex flex-wrap gap-2 text-slate-500 items-center pl-2">
