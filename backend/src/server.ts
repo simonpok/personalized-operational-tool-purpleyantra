@@ -326,6 +326,118 @@ app.get('/api/projects/:id/board-tru-stats', async (req, res) => {
   }
 });
 
+// Get total time remaining across all boards for a project
+app.get('/api/projects/:id/time-remaining', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const boards = await prisma.board.findMany({
+      where: { projectId: id },
+      include: {
+        lists: {
+          include: {
+            tasks: {
+              include: {
+                checklists: {
+                  include: {
+                    items: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    let totalSeconds = 0;
+
+    boards.forEach(board => {
+      board.lists.forEach(list => {
+        list.tasks.forEach(task => {
+          task.checklists.forEach(checklist => {
+            checklist.items.forEach(item => {
+              if (item.estimatedTime) {
+                const [val, unit] = item.estimatedTime.split(' ');
+                const num = parseInt(val, 10);
+                if (!isNaN(num)) {
+                  if (unit.startsWith('Day')) totalSeconds += num * 24 * 60 * 60;
+                  if (unit.startsWith('Hour')) totalSeconds += num * 60 * 60;
+                }
+              }
+            });
+          });
+        });
+      });
+    });
+
+    let elapsed = project.countdownElapsedSeconds;
+    if (project.countdownStatus === 'RUNNING' && project.countdownStartTime) {
+      elapsed += Math.floor((Date.now() - project.countdownStartTime.getTime()) / 1000);
+    }
+
+    const remainingSeconds = Math.max(0, totalSeconds - elapsed);
+    const displayDays = Math.floor(remainingSeconds / (24 * 60 * 60));
+    const displayHours = Math.floor((remainingSeconds / (60 * 60)) % 24);
+    const displayMinutes = Math.floor((remainingSeconds / 60) % 60);
+
+    res.json({ 
+      days: displayDays, 
+      hours: displayHours, 
+      minutes: displayMinutes,
+      seconds: remainingSeconds, // Raw remaining seconds for internal processing
+      status: project.countdownStatus
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to calculate time remaining' });
+  }
+});
+
+// Countdown controls
+app.post('/api/projects/:id/countdown/start', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await prisma.project.update({
+      where: { id },
+      data: {
+        countdownStatus: 'RUNNING',
+        countdownStartTime: new Date()
+      }
+    });
+    res.json(project);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to start countdown' });
+  }
+});
+
+app.post('/api/projects/:id/countdown/pause', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project || project.countdownStatus !== 'RUNNING') return res.json(project);
+
+    let elapsed = project.countdownElapsedSeconds;
+    if (project.countdownStartTime) {
+      elapsed += Math.floor((Date.now() - project.countdownStartTime.getTime()) / 1000);
+    }
+
+    const updatedProject = await prisma.project.update({
+      where: { id },
+      data: {
+        countdownStatus: 'PAUSED',
+        countdownElapsedSeconds: elapsed,
+        countdownStartTime: null
+      }
+    });
+    res.json(updatedProject);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to pause countdown' });
+  }
+});
+
 // Fetch boards for a project
 app.get('/api/projects/:id/boards', async (req, res) => {
   try {
@@ -591,6 +703,20 @@ app.delete('/api/checklists/:id', async (req, res) => {
 app.post('/api/checklists/:id/items', async (req, res) => {
   try {
     const { title, dueDate, T, R, U, estimatedTime } = req.body;
+
+    const checklist = await prisma.checklist.findUnique({ 
+      where: { id: req.params.id }, 
+      include: { task: { include: { goal: true } } } 
+    });
+    if (!checklist) return res.status(404).json({error: 'Not found'});
+
+    if (estimatedTime) {
+      const project = await prisma.project.findUnique({ where: { id: checklist.task.goal.projectId } });
+      if (project && project.countdownStatus === 'RUNNING') {
+        return res.status(400).json({ error: 'Cannot add time estimates while the countdown is RUNNING. Please pause the countdown first.' });
+      }
+    }
+
     let truAvg = null;
     if (T && R && U) {
       truAvg = parseFloat(((T + R + U) / 3).toFixed(1));
@@ -622,8 +748,18 @@ app.put('/api/checklist-items/:id', async (req, res) => {
     const { T, R, U, isCompleted, title, dueDate, estimatedTime } = req.body;
     
     // Grab original to check changes
-    const original = await prisma.checklistItem.findUnique({ where: { id: req.params.id }, include: { checklist: true } });
+    const original = await prisma.checklistItem.findUnique({ 
+      where: { id: req.params.id }, 
+      include: { checklist: { include: { task: { include: { goal: true } } } } } 
+    });
     if (!original) return res.status(404).json({error: 'Not found'});
+
+    if (estimatedTime !== undefined && estimatedTime !== original.estimatedTime) {
+      const project = await prisma.project.findUnique({ where: { id: original.checklist.task.goal.projectId } });
+      if (project && project.countdownStatus === 'RUNNING') {
+        return res.status(400).json({ error: 'Cannot modify time estimates while the countdown is RUNNING. Please pause the countdown first.' });
+      }
+    }
 
     let truAvg = original.truAvg;
     const finalT = T !== undefined ? T : original.T;

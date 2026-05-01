@@ -15,6 +15,9 @@ model Project {
   goals       Goal[]
   boards      Board[]
   departments Department[]
+  countdownStatus         String   @default("IDLE") // IDLE, RUNNING, PAUSED
+  countdownStartTime      DateTime?
+  countdownElapsedSeconds Int      @default(0)
   createdAt   DateTime     @default(now())
 }
 

@@ -217,6 +217,118 @@ function ProjectSidebar({ isOpen, onClose }: { isOpen: boolean, onClose: () => v
   );
 }
 
+function CountdownTimer({ projectId }: { projectId: string }) {
+  const [totalSeconds, setTotalSeconds] = useState(0);
+  const [status, setStatus] = useState<'IDLE' | 'RUNNING' | 'PAUSED'>('IDLE');
+
+  const fetchTime = () => {
+    if (!projectId) return;
+    fetch(`http://localhost:3001/api/projects/${projectId}/time-remaining`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && !data.error) {
+          setTotalSeconds(data.seconds || 0);
+          setStatus(data.status || 'IDLE');
+        }
+      })
+      .catch(console.error);
+  };
+
+  useEffect(() => {
+    fetchTime();
+
+    const socket = io('http://localhost:3001');
+    socket.on('progress:updated', fetchTime);
+    socket.on('board:updated', fetchTime);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (status !== 'RUNNING') return;
+
+    const interval = setInterval(() => {
+      setTotalSeconds(prev => {
+        if (prev <= 0) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [status]);
+
+  const handleAction = async (action: 'start' | 'pause') => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/projects/${projectId}/countdown/${action}`, {
+        method: 'POST'
+      });
+      if (res.ok) fetchTime();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const displayDays = Math.floor(totalSeconds / (24 * 60 * 60));
+  const displayHours = Math.floor((totalSeconds / (60 * 60)) % 24);
+  const displayMinutes = Math.floor((totalSeconds / 60) % 60);
+  const displaySeconds = Math.floor(totalSeconds % 60);
+
+  const TimeUnit = ({ value, label }: { value: number, label: string }) => (
+    <div className="flex flex-col items-center gap-2">
+      <div className="bg-[#2A9D8F] text-white rounded-xl relative overflow-hidden shadow-lg border-b-[3px] border-[#1D7A6F]">
+        <div className="px-4 py-3 sm:px-6 sm:py-5 text-4xl sm:text-6xl font-mono font-bold leading-none tracking-tighter w-[80px] sm:w-[110px] text-center">
+          {value.toString().padStart(2, '0')}
+        </div>
+        {/* Split Line */}
+        <div className="absolute top-1/2 left-0 w-full h-[2px] bg-[#1D7A6F]/40 -translate-y-1/2 z-10"></div>
+        {/* Flap Shadows */}
+        <div className="absolute top-1/2 left-0 w-2 h-[4px] bg-[#1D7A6F] -translate-y-1/2 z-10 rounded-r"></div>
+        <div className="absolute top-1/2 right-0 w-2 h-[4px] bg-[#1D7A6F] -translate-y-1/2 z-10 rounded-l"></div>
+        {/* Top Half Gradient */}
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-black/5 z-0 pointer-events-none"></div>
+      </div>
+      <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">{label}</span>
+    </div>
+  );
+
+  return (
+    <div className="bg-slate-900 text-white shadow-lg border border-slate-800 rounded-3xl p-4 md:p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col w-full h-full justify-center items-center">
+      <div className="flex items-center gap-3 mb-8">
+        <h3 className="text-xs sm:text-sm text-[#455A64] font-bold uppercase tracking-[0.2em] text-center">
+          Time Remaining
+        </h3>
+        {status === 'RUNNING' && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" title="Timer is running"></div>}
+      </div>
+      <div className="flex items-center justify-center gap-2 sm:gap-6 mb-8">
+        <TimeUnit value={displayDays} label="Days" />
+        <TimeUnit value={displayHours} label="Hours" />
+        <TimeUnit value={displayMinutes} label="Minutes" />
+        <TimeUnit value={displaySeconds} label="Seconds" />
+      </div>
+      
+      <div className="flex gap-4">
+        {status === 'IDLE' && (
+          <button onClick={() => handleAction('start')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] uppercase tracking-widest px-6 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition-all">
+            Start Countdown
+          </button>
+        )}
+        {status === 'RUNNING' && (
+          <button onClick={() => handleAction('pause')} className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] uppercase tracking-widest px-6 py-2.5 rounded-lg shadow-lg shadow-amber-500/20 transition-all">
+            Pause
+          </button>
+        )}
+        {status === 'PAUSED' && (
+          <button onClick={() => handleAction('start')} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] uppercase tracking-widest px-6 py-2.5 rounded-lg shadow-lg shadow-emerald-500/20 transition-all">
+            Continue
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function Dashboard() {
   const { goalId } = useParams();
@@ -305,15 +417,6 @@ function Dashboard() {
           </h2>
           <p className="text-slate-400 dark:text-slate-500 font-mono text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold">Strategic Operational Intelligence</p>
         </div>
-        <div className="text-right">
-          <div className="text-slate-400 dark:text-slate-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mb-1">Status Coverage</div>
-          <div className="flex items-center gap-3 justify-end">
-             <span className="text-2xl md:text-4xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{Math.round(stats.progress)}%</span>
-             <div className="w-16 md:w-24 h-2 md:h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-                <div className="h-full bg-blue-600 rounded-full" style={{width: `${stats.progress}%`}}></div>
-             </div>
-          </div>
-        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
@@ -355,9 +458,9 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Mission Load Distribution */}
-      <div className="flex justify-center mb-8">
-        <div className="bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-800 rounded-3xl p-4 md:p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col w-full max-w-2xl">
+      {/* Mission Load Distribution & Countdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-800 rounded-3xl p-4 md:p-8 transform transition-all hover:shadow-xl relative overflow-hidden flex flex-col w-full">
           <div className="flex flex-col mb-6">
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">Mission Load Distribution</h3>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Relative weight by Department Board</p>
@@ -398,6 +501,10 @@ function Dashboard() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="flex w-full">
+           <CountdownTimer projectId={stats.projectId} />
         </div>
       </div>
       

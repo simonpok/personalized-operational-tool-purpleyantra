@@ -87,6 +87,9 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
         const newTask = { ...localTask, checklists: updatedChecklists };
         setLocalTask(newTask);
         onTaskUpdated(newTask);
+      } else {
+        const data = await res.json();
+        if (data.error) alert(data.error);
       }
     } catch (e) { console.error(e); }
   };
@@ -118,6 +121,9 @@ export function TaskDetailModal({ task, onClose, onTaskUpdated }: TaskDetailModa
         const newTask = { ...localTask, checklists: updatedChecklists };
         setLocalTask(newTask);
         onTaskUpdated(newTask);
+      } else {
+        const data = await res.json();
+        if (data.error) alert(data.error);
       }
     } catch (e) { console.error(e); }
   };
